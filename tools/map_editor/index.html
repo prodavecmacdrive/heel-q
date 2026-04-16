@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Heel Quest — Map Editor</title>
+  <meta name="description" content="Map Editor tool for Heel Quest point-and-click adventure" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/src/ui/styles/editor.css" />
+</head>
+<body>
+
+  <div id="editor-root">
+    <!-- Menu Bar -->
+    <header id="menu-bar"></header>
+
+    <!-- Top Panel: Mode Switcher -->
+    <nav id="top-panel"></nav>
+
+    <!-- Main content area -->
+    <div id="editor-body">
+      <!-- Left Panel: Toolbar -->
+      <aside id="left-panel"></aside>
+
+      <!-- Center: Viewport -->
+      <main id="viewport-container">
+        <canvas id="viewport-canvas"></canvas>
+        <div id="viewport-overlay">
+          <span id="viewport-info">Room Map Mode</span>
+        </div>
+      </main>
+
+      <!-- Right Panel: Inspector -->
+      <aside id="right-panel"></aside>
+    </div>
+
+    <!-- Bottom Panel: Content Browser -->
+    <section id="bottom-panel"></section>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

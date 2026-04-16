@@ -1,0 +1,10 @@
+{
+  "name": "heel-quest-workspace",
+  "version": "1.0.0",
+  "description": "Heel Quest Engine and Editor Toolkit",
+  "scripts": {
+    "dev:editor": "cd tools/map_editor && npm run dev",
+    "dev:engine": "cd engine && npm run dev",
+    "dev": "npm run dev:editor & npm run dev:engine"
+  }
+}

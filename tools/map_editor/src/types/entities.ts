@@ -142,6 +142,11 @@ export interface SpawnEntity extends BaseEntity {
   // Character parameters
   characterSpeed: number;
   characterAsset: string;       // path to main sprite sheet/model
+  characterSequenceSource: string;
+  characterSequenceJson: string;
+  characterSequenceFps: number;
+  characterSequenceLoop: boolean;
+  characterSequenceAutoplay: boolean;
   actionMapping: {              // maps hardcoded states to sequence names
     idle: string;
     walk: string;
@@ -239,7 +244,7 @@ export function createDefaultEntity(type: EntityType, name?: string): EditorEnti
       return { ...base, type: 'trigger', shape: 'box', onEnterEvent: '', onLeaveEvent: '', triggerOnce: false, extents: { x: 2, y: 2, z: 2 } };
 
     case 'spawn':
-      return { ...base, type: 'spawn', spawnId: 'spawn_default', initialFacing: { x: 0, y: 0, z: -1 }, characterSpeed: 3.0, characterAsset: '', actionMapping: { idle: 'idle', walk: 'walk', interact: 'interact', run: 'run' } };
+      return { ...base, type: 'spawn', spawnId: 'spawn_default', initialFacing: { x: 0, y: 0, z: -1 }, characterSpeed: 3.0, characterAsset: '', characterSequenceSource: '', characterSequenceJson: '', characterSequenceFps: 12, characterSequenceLoop: true, characterSequenceAutoplay: true, actionMapping: { idle: 'idle', walk: 'walk', interact: 'interact', run: 'run' } };
 
     case 'door':
       return { ...base, type: 'door', name: name || 'New Door', targetRoomId: '', targetSpawnId: '', interactionState: 'open', materialType: 'color', color: '#6B4423', opacity: 1, textureSource: '', uvTilingX: 1, uvTilingY: 1, uvOffsetX: 0, uvOffsetY: 0, sequenceSource: '', sequenceJson: '', activeAnimation: '', playbackSpeed: 1, sequenceLoop: true, sequenceAutoplay: true, wallDirX: 1, wallDirZ: 0, wallAnchorX: 0, wallAnchorZ: 0, worldDoorId: '', transform: { ...base.transform, scale: { x: 1.2, y: 2.5, z: 0.35 } } };

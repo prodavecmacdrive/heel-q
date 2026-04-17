@@ -110,7 +110,9 @@
             "walk": "walk",
             "interact": "interact",
             "run": "run"
-          }
+          },
+          "characterSequenceSource": "\\assets\\sprites\\customer.png",
+          "characterSequenceJson": "\\assets\\sprites\\customer.json"
         },
         {
           "id": "camera_mo29skp5_4",

@@ -373,6 +373,11 @@ export class RightPanel {
     `) + this.section('Character', `
       ${this.propNumber('characterSpeed', 'Move Speed', e.characterSpeed ?? 3.0, 1)}
       ${this.propInput('characterAsset', 'Asset Source', e.characterAsset || '')}
+      ${this.propInput('characterSequenceSource', 'Sequence Image', e.characterSequenceSource || '')}
+      ${this.propInput('characterSequenceJson', 'Sequence JSON', e.characterSequenceJson || '')}
+      ${this.propNumber('characterSequenceFps', 'Sequence FPS', e.characterSequenceFps ?? 12, 1)}
+      ${this.propCheckbox('characterSequenceLoop', 'Loop', e.characterSequenceLoop ?? true)}
+      ${this.propCheckbox('characterSequenceAutoplay', 'Autoplay', e.characterSequenceAutoplay ?? true)}
       ${this.propInput('actionMapping.idle', 'Idle Anim', e.actionMapping?.idle || 'idle')}
       ${this.propInput('actionMapping.walk', 'Walk Anim', e.actionMapping?.walk || 'walk')}
       ${this.propInput('actionMapping.interact', 'Interact Anim', e.actionMapping?.interact || 'interact')}

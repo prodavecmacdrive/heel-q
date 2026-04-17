@@ -80,7 +80,12 @@ async function bootstrap() {
             const spawn = entities.find(e => e.type === 'spawn');
             return {
                 characterSpeed: spawn?.characterSpeed,
-                characterAsset: spawn?.characterAsset
+                characterAsset: spawn?.characterAsset,
+                characterSequenceSource: normalizeAssetPath(spawn?.characterSequenceSource || ''),
+                characterSequenceJson: normalizeAssetPath(spawn?.characterSequenceJson || ''),
+                characterSequenceFps: spawn?.characterSequenceFps ?? 12,
+                characterSequenceLoop: spawn?.characterSequenceLoop ?? true,
+                characterSequenceAutoplay: spawn?.characterSequenceAutoplay ?? true,
             };
         };
 
@@ -207,7 +212,12 @@ async function bootstrap() {
               cameraNear: legacyCam.near,
               cameraFar: legacyCam.far,
               characterSpeed: spawnChar.characterSpeed,
-              characterAsset: spawnChar.characterAsset
+              characterAsset: spawnChar.characterAsset,
+              characterSequenceSource: spawnChar.characterSequenceSource,
+              characterSequenceJson: spawnChar.characterSequenceJson,
+              characterSequenceFps: spawnChar.characterSequenceFps,
+              characterSequenceLoop: spawnChar.characterSequenceLoop,
+              characterSequenceAutoplay: spawnChar.characterSequenceAutoplay,
            };
         });
         
@@ -217,6 +227,56 @@ async function bootstrap() {
         const loadedKeys = new Set<string>();
 
         for (const room of mappedRooms) {
+            if (room.characterSequenceSource) {
+                const seqKey = room.characterSequenceSource;
+                if (seqKey && !loadedKeys.has(seqKey)) {
+                    loadedKeys.add(seqKey);
+                    const path = seqKey.startsWith('textures/') || seqKey.startsWith('sprites/')
+                        ? seqKey
+                        : `sprites/${seqKey}`;
+                    const p = tm.loadTexture(seqKey, `/assets/${path}`)
+                        .catch(() => {
+                            const altPath = path.startsWith('sprites/')
+                                ? path.replace('sprites/', 'textures/')
+                                : path.replace('textures/', 'sprites/');
+                            return tm.loadTexture(seqKey, `/assets/${altPath}`).catch(() => {});
+                        }) as Promise<void>;
+                    preloads.push(p);
+                }
+            }
+
+            if (room.characterSequenceJson) {
+                const jsonPath = room.characterSequenceJson.startsWith('sprites/') || room.characterSequenceJson.startsWith('textures/')
+                    ? room.characterSequenceJson
+                    : `sprites/${room.characterSequenceJson}`;
+                const jsonUrl = `/assets/${jsonPath}`;
+                const p = fetch(jsonUrl)
+                    .then(r => r.ok ? r.json() : Promise.reject(`HTTP ${r.status}`))
+                    .then(atlas => {
+                        console.log(`Successfully parsed player atlas JSON: ${jsonPath}`);
+                        room.characterSequenceFrames = atlas.frames.map((f: any) => f.frame as {x:number;y:number;w:number;h:number});
+                        room.characterSequenceImageWidth = atlas.meta.size.w;
+                        room.characterSequenceImageHeight = atlas.meta.size.h;
+                        const imgName = atlas.meta.image as string;
+                        if (!room.characterSequenceSource) {
+                            room.characterSequenceSource = imgName;
+                        }
+                        room.characterAsset = room.characterSequenceSource || room.characterAsset || imgName;
+                        const texKey = room.characterSequenceSource || room.characterAsset || imgName;
+                        if (!loadedKeys.has(texKey)) {
+                            loadedKeys.add(texKey);
+                            const imgPath = imgName.startsWith('sprites/') || imgName.startsWith('textures/')
+                                ? imgName
+                                : `sprites/${imgName}`;
+                            return tm.loadTexture(texKey, `/assets/${imgPath}`).then(() => {});
+                        }
+                    })
+                    .catch(err => {
+                        console.error(`Failed to preload player atlas JSON: ${jsonUrl}`, err);
+                    });
+                preloads.push(p as Promise<void>);
+            }
+
             for (const e of room.entities) {
                 if (e.sequenceSource) {
                     const seqKey = e.sequenceSource;

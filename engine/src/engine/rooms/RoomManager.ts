@@ -247,14 +247,35 @@ export class RoomManager {
             // No player exists yet — spawn one at the designated spawn point
             let spawnPos = { x: 0, y: 0, z: 2 };
             let playerSpeed = roomData.characterSpeed ?? 3.0;
-            let playerSpriteKey = roomData.characterAsset || 'scifi_sheet';
+            let playerSpriteKey = roomData.characterSequenceSource || roomData.characterAsset || 'scifi_sheet';
             if (roomData.spawnPoints && roomData.spawnPoints.length > 0) {
                 spawnPos = roomData.spawnPoints[0].position;
             }
-            this.spawnSpriteEntity(
-                { spriteKey: playerSpriteKey, width: 2, height: 3, position: spawnPos },
-                floorY, true, playerSpeed
-            );
+
+            if (roomData.characterSequenceJson || roomData.characterSequenceSource || (roomData.characterSequenceFrames && roomData.characterSequenceFrames.length > 0)) {
+                this.spawnAtlasSpriteEntity(
+                    {
+                        spriteKey: playerSpriteKey,
+                        width: 2,
+                        height: 3,
+                        position: spawnPos,
+                        fps: roomData.characterSequenceFps ?? 12,
+                        loop: roomData.characterSequenceLoop ?? true,
+                        autoplay: roomData.characterSequenceAutoplay ?? true,
+                        atlasFrames: roomData.characterSequenceFrames,
+                        imageWidth: roomData.characterSequenceImageWidth,
+                        imageHeight: roomData.characterSequenceImageHeight,
+                    },
+                    floorY,
+                    true,
+                    playerSpeed
+                );
+            } else {
+                this.spawnSpriteEntity(
+                    { spriteKey: playerSpriteKey, width: 2, height: 3, position: spawnPos },
+                    floorY, true, playerSpeed
+                );
+            }
         }
 
         // ── 9. If player survived from previous room, update membership ──
@@ -514,7 +535,7 @@ export class RoomManager {
      * Atlas data (atlasFrames, imageWidth, imageHeight) must be pre-populated in `def`
      * by the preloading step in main.ts before any room is loaded.
      */
-    private spawnAtlasSpriteEntity(def: EntitySpawnDef, floorY: number) {
+    private spawnAtlasSpriteEntity(def: EntitySpawnDef, floorY: number, isPlayer: boolean = false, playerSpeed: number = 3.0) {
         const tex = this.textureManager.getTexture(def.spriteKey) ?? undefined;
 
         const mat = new THREE.MeshBasicMaterial({
@@ -574,6 +595,16 @@ export class RoomManager {
                 loop:            def.loop    ?? true,
                 autoplay:        def.autoplay ?? true,
             } satisfies AtlasAnimation);
+        }
+
+        if (isPlayer) {
+            this.world.addComponent(entity, 'Player', {
+                path: [],
+                speed: playerSpeed,
+                isMoving: false,
+                floorY: floorY,
+                pendingPortalId: null
+            });
         }
 
         if (def.isObstacle) {

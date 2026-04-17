@@ -123,4 +123,12 @@ export interface RoomData {
     characterSpeed?: number;
     /** Character asset source */
     characterAsset?: string;
+    characterSequenceSource?: string;
+    characterSequenceJson?: string;
+    characterSequenceFps?: number;
+    characterSequenceLoop?: boolean;
+    characterSequenceAutoplay?: boolean;
+    characterSequenceFrames?: Array<{ x: number; y: number; w: number; h: number }>;
+    characterSequenceImageWidth?: number;
+    characterSequenceImageHeight?: number;
 }

@@ -74,6 +74,19 @@ export interface SpriteAnimation {
     stateFrames: Record<string, { start: number; end: number }>;
 }
 
+// ─── Atlas animation component (Texture Packer pixel-coordinate frames) ──
+
+export interface AtlasAnimation {
+    frames: Array<{x: number; y: number; w: number; h: number}>;
+    imageWidth: number;
+    imageHeight: number;
+    currentFrame: number;
+    frameRate: number;
+    timeAccumulator: number;
+    loop: boolean;
+    autoplay: boolean;
+}
+
 // ─── Marker tags ──────────────────────────────────────────────────
 
 export interface FloorMarker {
@@ -119,6 +132,7 @@ export interface ComponentRegistry {
     'Obstacle': Obstacle;
     'DoorMarker': DoorMarker;
     'CameraMarker': CameraMarker;
+    'AtlasAnimation': AtlasAnimation;
 }
 
 export type ComponentName = keyof ComponentRegistry;

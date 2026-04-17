@@ -23,6 +23,16 @@ async function bootstrap() {
         
         console.log(`Loaded World Project: ${worldData.projectId} with ${worldData.rooms.length} rooms`);
         
+        // Normalize paths saved by the editor (may be absolute Windows paths like \assets\sprites\foo.png)
+        // Returns just the relative asset path, e.g. 'sprites/customer.png' or 'textures/door.jpg'
+        const normalizeAssetPath = (raw: string): string => {
+            if (!raw) return '';
+            return raw
+                .replace(/\\/g, '/')   // backslashes → forward slashes
+                .replace(/^\/+/, '')    // strip leading slashes
+                .replace(/^assets\//, ''); // strip 'assets/' prefix
+        };
+
         // Map the new WorldProject format to the engine's registerRooms (which expects MapScene shape)
         // Note: the engine currently expects MapScene shape, so we format RoomData to look like MapScene 
         // Helper to extract component-based entities to properties
@@ -109,7 +119,7 @@ async function bootstrap() {
               spawnPoints: r.spawnPoints,
               outline: r.outline,
               entities: r.entities
-                 .filter((e: any) => e.type === 'sprite' || e.type === 'animated_sprite' || e.type === 'primitive' || e.type === 'light' || e.type === 'door')
+                 .filter((e: any) => e.type === 'sprite' || e.type === 'animated_sprite' || e.type === 'primitive' || e.type === 'light' || e.type === 'door' || e.type === 'sound')
                  .map((e: any) => {
                   const result: any = {
                       entityType: e.type,
@@ -127,7 +137,12 @@ async function bootstrap() {
                       result.color = e.color || '#808080';
                       result.opacity = e.opacity ?? 1;
                       result.isObstacle = e.isCollider ?? false;
-                      result.textureSource = e.textureSource || '';
+                      result.textureSource = normalizeAssetPath(e.textureSource || '');
+                      result.sequenceSource = normalizeAssetPath(e.sequenceSource || '');
+                      result.sequenceJson = normalizeAssetPath(e.sequenceJson || '');
+                      result.fps = e.playbackSpeed ?? 12;
+                      result.loop = e.sequenceLoop ?? true;
+                      result.autoplay = e.sequenceAutoplay ?? true;
                       result.uvTilingX = e.uvTilingX ?? 1;
                       result.uvTilingY = e.uvTilingY ?? 1;
                       result.uvOffsetX = e.uvOffsetX ?? 0;
@@ -143,7 +158,12 @@ async function bootstrap() {
                       result.interactionState = e.interactionState || 'closed';
                       result.color = e.color || '#8B4513';
                       result.opacity = e.opacity ?? 1;
-                      result.textureSource = e.textureSource || '';
+                      result.textureSource = normalizeAssetPath(e.textureSource || '');
+                      result.sequenceSource = normalizeAssetPath(e.sequenceSource || '');
+                      result.sequenceJson = normalizeAssetPath(e.sequenceJson || '');
+                      result.fps = e.playbackSpeed ?? 12;
+                      result.loop = e.sequenceLoop ?? true;
+                      result.autoplay = e.sequenceAutoplay ?? true;
                       result.uvTilingX = e.uvTilingX ?? 1;
                       result.uvTilingY = e.uvTilingY ?? 1;
                       result.uvOffsetX = e.uvOffsetX ?? 0;
@@ -151,6 +171,20 @@ async function bootstrap() {
                       result.isObstacle = true;
                       // Wire door entity to its portal for PortalSystem collision matching
                       result.portalId = e.worldDoorId || '';
+                  } else if (e.type === 'animated_sprite') {
+                      result.spriteKey = e.textureSource || ''; // key used in TextureManager
+                      result.sequenceJson = e.textureSource ? `${e.textureSource}.json` : '';
+                      result.sequenceSource = e.textureSource || '';
+                      result.fps = e.fps ?? 12;
+                      result.loop = e.loop ?? true;
+                      result.autoplay = e.autoplay ?? true;
+                      result.sheetColumns = e.columns ?? 1;
+                      result.sheetRows = e.rows ?? 1;
+                  } else if (e.type === 'sound') {
+                      result.audioSource = e.audioSource || e.src || '';
+                      result.volume = e.volume ?? 1;
+                      result.loop = e.loop ?? true;
+                      result.spatialAudio = e.spatialAudio ?? false;
                   } else {
                       result.spriteKey = e.textureSource || e.spriteKey || '';
                   }
@@ -177,6 +211,89 @@ async function bootstrap() {
            };
         });
         
+        // ── Preload textures and parse atlas JSONs for all rooms ──────────────
+        const tm = engine.getTextureManager();
+        const preloads: Promise<void>[] = [];
+        const loadedKeys = new Set<string>();
+
+        for (const room of mappedRooms) {
+            for (const e of room.entities) {
+                if (e.sequenceSource) {
+                    const seqKey = e.sequenceSource;
+                    if (seqKey && !loadedKeys.has(seqKey)) {
+                        loadedKeys.add(seqKey);
+                        const path = seqKey.startsWith('textures/') || seqKey.startsWith('sprites/')
+                            ? seqKey
+                            : `sprites/${seqKey}`;
+                        const p = tm.loadTexture(seqKey, `/assets/${path}`)
+                            .catch(() => {
+                                const altPath = path.startsWith('sprites/')
+                                    ? path.replace('sprites/', 'textures/')
+                                    : path.replace('textures/', 'sprites/');
+                                return tm.loadTexture(seqKey, `/assets/${altPath}`).catch(() => {});
+                            }) as Promise<void>;
+                        preloads.push(p);
+                    }
+                }
+
+                if (e.sequenceJson) {
+                    const jsonPath = e.sequenceJson.startsWith('sprites/') || e.sequenceJson.startsWith('textures/')
+                        ? e.sequenceJson
+                        : `sprites/${e.sequenceJson}`;
+                    const jsonUrl = `/assets/${jsonPath}`;
+                    const p = fetch(jsonUrl)
+                        .then(r => r.ok ? r.json() : Promise.reject(`HTTP ${r.status}`))
+                        .then(atlas => {
+                            console.log(`Successfully parsed atlas JSON: ${jsonPath}`);
+                            e.atlasFrames  = atlas.frames.map((f: any) => f.frame as {x:number;y:number;w:number;h:number});
+                            e.imageWidth   = atlas.meta.size.w;
+                            e.imageHeight  = atlas.meta.size.h;
+                            
+                            // If e.sequenceSource is missing (e.g. only .json was provided), 
+                            // use the image name from the atlas metadata.
+                            const imgName  = atlas.meta.image as string;
+                            if (!e.sequenceSource) {
+                                e.sequenceSource = imgName;
+                            }
+                            
+                            const texKey   = e.sequenceSource || e.spriteKey || imgName;
+                            e.spriteKey    = texKey;
+                            
+                            if (!loadedKeys.has(texKey)) {
+                                loadedKeys.add(texKey);
+                                const imgPath = imgName.startsWith('sprites/') || imgName.startsWith('textures/')
+                                    ? imgName
+                                    : `sprites/${imgName}`;
+                                return tm.loadTexture(texKey, `/assets/${imgPath}`).then(() => {});
+                            }
+                        })
+                        .catch(err => {
+                            console.error(`Failed to preload atlas JSON: ${jsonUrl}`, err);
+                        });
+                    preloads.push(p as Promise<void>);
+                }
+
+                if (e.textureSource && e.entityType !== 'sound' && !e.sequenceSource) {
+                    const key = (e as any).spriteKey || e.textureSource;
+                    if (key && !loadedKeys.has(key)) {
+                        loadedKeys.add(key);
+                        const path = e.textureSource.startsWith('textures/') || e.textureSource.startsWith('sprites/')
+                            ? e.textureSource
+                            : `textures/${e.textureSource}`;
+                        const p = tm.loadTexture(key, `/assets/${path}`)
+                            .catch(() => {
+                                const altPath = path.startsWith('textures/')
+                                    ? path.replace('textures/', 'sprites/')
+                                    : path.replace('sprites/', 'textures/');
+                                return tm.loadTexture(key, `/assets/${altPath}`).catch(() => {});
+                            }) as Promise<void>;
+                        preloads.push(p);
+                    }
+                }
+            }
+        }
+        await Promise.all(preloads);
+
         engine.registerRooms(mappedRooms);
         engine.start();
 

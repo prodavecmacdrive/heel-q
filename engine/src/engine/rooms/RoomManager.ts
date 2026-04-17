@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { World } from '../ecs/World';
 import { RoomData, EntitySpawnDef, CameraDef } from './RoomData';
 import { TextureManager } from '../rendering/TextureManager';
-import { SpriteAnimation, Transform, MeshRenderer, DoorMarker, CameraMarker } from '../ecs/Component';
+import { SpriteAnimation, AtlasAnimation, Transform, MeshRenderer, DoorMarker, CameraMarker } from '../ecs/Component';
 import { NavGrid } from '../nav/NavGrid';
 import { Entity } from '../ecs/Entity';
 
@@ -41,6 +41,7 @@ export class RoomManager {
     private scene: THREE.Scene;
     private textureManager: TextureManager;
     private camera: THREE.PerspectiveCamera;
+    private roomAudioElements: HTMLAudioElement[] = [];
 
     constructor(
         world: World,
@@ -219,8 +220,13 @@ export class RoomManager {
                 this.spawnLightEntity(entityDef);
             } else if (entityDef.entityType === 'door') {
                 this.spawnDoorEntity3D(entityDef, floorY);
+            } else if (entityDef.entityType === 'sound') {
+                this.spawnSoundEntity(entityDef);
+                continue; // sound entities have no obstacle geometry
+            } else if (entityDef.entityType === 'animated_sprite' && entityDef.atlasFrames) {
+                this.spawnAtlasSpriteEntity(entityDef, floorY);
             } else {
-                // sprite or animated_sprite — scene prop, not player
+                // sprite or animated_sprite (no pre-parsed atlas) — scene prop
                 this.spawnSpriteEntity(entityDef, floorY, false);
             }
 
@@ -297,7 +303,8 @@ export class RoomManager {
             default:         geo = new THREE.BoxGeometry(1, 1, 1); break;
         }
 
-        const color = new THREE.Color(def.color || '#808080');
+        const hasTexture = !!def.textureSource || !!def.sequenceSource;
+        const color = hasTexture ? new THREE.Color(0xffffff) : new THREE.Color(def.color || '#808080');
         const mat = new THREE.MeshStandardMaterial({
             color,
             transparent: (def.opacity ?? 1) < 1,
@@ -306,6 +313,31 @@ export class RoomManager {
             metalness: 0.1,
             side: THREE.DoubleSide
         });
+
+        const texturePathValue = def.sequenceSource || def.textureSource;
+        if (texturePathValue) {
+            const loader = new THREE.TextureLoader();
+            const path = texturePathValue.startsWith('textures/') || texturePathValue.startsWith('sprites/')
+                ? texturePathValue
+                : (def.sequenceSource ? `sprites/${texturePathValue}` : `textures/${texturePathValue}`);
+            const tex = loader.load(`/assets/${path}`);
+            tex.minFilter = THREE.NearestFilter;
+            tex.magFilter = THREE.NearestFilter;
+            tex.generateMipmaps = false;
+            tex.colorSpace = THREE.SRGBColorSpace;
+            tex.wrapS = THREE.RepeatWrapping;
+            tex.wrapT = THREE.RepeatWrapping;
+            if (def.atlasFrames && def.imageWidth && def.imageHeight && def.atlasFrames.length > 0) {
+                const firstFrame = def.atlasFrames[0];
+                tex.repeat.set(firstFrame.w / def.imageWidth, firstFrame.h / def.imageHeight);
+                tex.offset.set(firstFrame.x / def.imageWidth, 1 - (firstFrame.y + firstFrame.h) / def.imageHeight);
+            } else {
+                tex.repeat.set(def.uvTilingX ?? 1, def.uvTilingY ?? 1);
+                tex.offset.set(def.uvOffsetX ?? 0, def.uvOffsetY ?? 0);
+            }
+            mat.map = tex;
+            mat.needsUpdate = true;
+        }
 
         const mesh = new THREE.Mesh(geo, mat);
 
@@ -326,6 +358,19 @@ export class RoomManager {
             scale: mesh.scale.clone()
         });
         this.world.addComponent(entity, 'MeshRenderer', { mesh });
+
+        if (def.atlasFrames && def.imageWidth && def.imageHeight && def.atlasFrames.length > 0) {
+            this.world.addComponent(entity, 'AtlasAnimation', {
+                frames: def.atlasFrames,
+                imageWidth: def.imageWidth,
+                imageHeight: def.imageHeight,
+                currentFrame: 0,
+                frameRate: def.fps ?? 12,
+                timeAccumulator: 0,
+                loop: def.loop ?? true,
+                autoplay: def.autoplay ?? true,
+            } satisfies AtlasAnimation);
+        }
     }
 
     /**
@@ -355,14 +400,33 @@ export class RoomManager {
     }
 
     private spawnSpriteEntity(def: EntitySpawnDef, floorY: number, isPlayer: boolean, playerSpeed: number = 3.0) {
-        const tex = this.textureManager.getTexture(def.spriteKey);
+        let tex = this.textureManager.getTexture(def.spriteKey) ?? null;
 
         const mat = new THREE.MeshBasicMaterial({
             transparent: true,
             alphaTest: 0.1,
             side: THREE.DoubleSide,
-            map: tex
+            map: tex ?? undefined
         });
+
+        // If texture isn't in the manager yet, load it asynchronously
+        if (!tex && def.spriteKey) {
+            const key = def.spriteKey;
+            const path = key.startsWith('textures/') || key.startsWith('sprites/') 
+                ? key 
+                : `textures/${key}`;
+            
+            this.textureManager.loadTexture(key, `/assets/${path}`)
+                .then(loaded => { mat.map = loaded; mat.needsUpdate = true; })
+                .catch(() => {
+                    const altPath = path.startsWith('textures/') 
+                        ? path.replace('textures/', 'sprites/') 
+                        : path.replace('sprites/', 'textures/');
+                    this.textureManager.loadTexture(key, `/assets/${altPath}`)
+                        .then(loaded => { mat.map = loaded; mat.needsUpdate = true; })
+                        .catch(() => {});
+                });
+        }
 
         const geo = new THREE.PlaneGeometry(1, 1);
         const mesh = new THREE.Mesh(geo, mat);
@@ -412,20 +476,24 @@ export class RoomManager {
             });
         }
 
-        // Sprite animation
+        // Sprite animation — prefer SHEET_META, fall back to per-entity columns/rows
         const meta = SHEET_META[def.spriteKey];
-        if (meta && tex) {
-            tex.repeat.set(1 / meta.columns, 1 / meta.rows);
-            tex.offset.set(0, 1 - 1 / meta.rows);
+        const cols = meta?.columns ?? def.sheetColumns;
+        const rows = meta?.rows    ?? def.sheetRows;
+        if (cols && rows && tex) {
+            tex.repeat.set(1 / cols, 1 / rows);
+            tex.offset.set(0, 1 - 1 / rows);
+            const totalFrames = meta?.totalFrames ?? (cols * rows);
+            const stateFrames = meta?.stateFrames ?? { idle: { start: 0, end: totalFrames - 1 } };
             this.world.addComponent(entity, 'SpriteAnimation', {
-                columns: meta.columns,
-                rows: meta.rows,
-                totalFrames: meta.totalFrames,
+                columns: cols,
+                rows: rows,
+                totalFrames,
                 currentFrame: 0,
-                frameRate: 6,
+                frameRate: def.fps ?? 6,
                 timeAccumulator: 0,
                 state: 'idle' as const,
-                stateFrames: meta.stateFrames
+                stateFrames
             } satisfies SpriteAnimation);
         }
 
@@ -439,6 +507,97 @@ export class RoomManager {
                 pendingPortalId: null
             });
         }
+    }
+
+    /**
+     * Spawn an atlas-animated sprite (Texture Packer pixel-coordinate JSON format).
+     * Atlas data (atlasFrames, imageWidth, imageHeight) must be pre-populated in `def`
+     * by the preloading step in main.ts before any room is loaded.
+     */
+    private spawnAtlasSpriteEntity(def: EntitySpawnDef, floorY: number) {
+        const tex = this.textureManager.getTexture(def.spriteKey) ?? undefined;
+
+        const mat = new THREE.MeshBasicMaterial({
+            map: tex,
+            transparent: true,
+            alphaTest: 0.1,
+            side: THREE.DoubleSide,
+        });
+
+        const geo  = new THREE.PlaneGeometry(1, 1);
+        const mesh = new THREE.Mesh(geo, mat);
+
+        const feetX = def.position.x;
+        const feetZ = def.position.z;
+        mesh.position.set(feetX, floorY, feetZ);
+        this.scene.add(mesh);
+
+        const entity = this.world.createEntity();
+        this.world.addComponent(entity, 'RoomMember',  { roomId: this.currentRoomId! });
+        this.world.addComponent(entity, 'Transform', {
+            position: new THREE.Vector3(feetX, floorY, feetZ),
+            rotation: new THREE.Euler(),
+            scale:    new THREE.Vector3(1, 1, 1)
+        });
+        this.world.addComponent(entity, 'MeshRenderer', { mesh });
+
+        // Derive visual size from first atlas frame's aspect ratio
+        const first  = def.atlasFrames?.[0];
+        const frameW = first?.w ?? 89;
+        const frameH = first?.h ?? 129;
+        const spriteH = def.height || 3;
+        const spriteW = spriteH * (frameW / frameH);
+
+        this.world.addComponent(entity, 'Sprite', {
+            textureKey: def.spriteKey,
+            frame: 0,
+            baseWidth:  spriteW,
+            baseHeight: spriteH,
+            discreteScaleOffset: 0
+        });
+
+        if (def.atlasFrames && def.imageWidth && def.imageHeight) {
+            // Apply first-frame UV so the sprite isn't blank before the first tick
+            if (tex && first) {
+                tex.repeat.set(first.w / def.imageWidth, first.h / def.imageHeight);
+                tex.offset.set(first.x / def.imageWidth, 1 - (first.y + first.h) / def.imageHeight);
+                tex.needsUpdate = true;
+            }
+
+            this.world.addComponent(entity, 'AtlasAnimation', {
+                frames:          def.atlasFrames,
+                imageWidth:      def.imageWidth,
+                imageHeight:     def.imageHeight,
+                currentFrame:    0,
+                frameRate:       def.fps ?? 12,
+                timeAccumulator: 0,
+                loop:            def.loop    ?? true,
+                autoplay:        def.autoplay ?? true,
+            } satisfies AtlasAnimation);
+        }
+
+        if (def.isObstacle) {
+            this.world.addComponent(entity, 'Obstacle', {
+                halfWidth: def.obstacleHalfWidth ?? spriteW / 2,
+                halfDepth: def.obstacleHalfDepth ?? 0.8
+            });
+        }
+    }
+
+    /**
+     * Spawn a sound entity as an HTMLAudioElement attached to the page.
+     * Audio is stopped and removed when the room is unloaded.
+     */
+    private spawnSoundEntity(def: EntitySpawnDef) {
+        if (!def.audioSource) return;
+        const audio = document.createElement('audio');
+        audio.src    = `/assets/audio/${def.audioSource}`;
+        audio.loop   = def.loop   ?? true;
+        audio.volume = Math.min(1, Math.max(0, def.volume ?? 1));
+        (audio as any).isRoomAudio = true;
+        document.body.appendChild(audio);
+        audio.play().catch(() => {}); // Autoplay may be blocked until user interaction
+        this.roomAudioElements.push(audio);
     }
 
     /**
@@ -457,17 +616,27 @@ export class RoomManager {
             side: THREE.DoubleSide,
         };
 
-        // Apply texture if specified
-        if (def.textureSource) {
+        // Apply texture or sequence if specified
+        const texturePathValue = def.sequenceSource || def.textureSource;
+        if (texturePathValue) {
             const loader = new THREE.TextureLoader();
-            const tex = loader.load(`/assets/textures/${def.textureSource}`);
+            const path = texturePathValue.startsWith('textures/') || texturePathValue.startsWith('sprites/')
+                ? texturePathValue
+                : (def.sequenceSource ? `sprites/${texturePathValue}` : `textures/${texturePathValue}`);
+            const tex = loader.load(`/assets/${path}`);
             tex.wrapS = THREE.RepeatWrapping;
             tex.wrapT = THREE.RepeatWrapping;
-            if (def.uvTilingX || def.uvTilingY) {
-                tex.repeat.set(def.uvTilingX || 1, def.uvTilingY || 1);
-            }
-            if (def.uvOffsetX || def.uvOffsetY) {
-                tex.offset.set(def.uvOffsetX || 0, def.uvOffsetY || 0);
+            if (def.atlasFrames && def.imageWidth && def.imageHeight && def.atlasFrames.length > 0) {
+                const firstFrame = def.atlasFrames[0];
+                tex.repeat.set(firstFrame.w / def.imageWidth, firstFrame.h / def.imageHeight);
+                tex.offset.set(firstFrame.x / def.imageWidth, 1 - (firstFrame.y + firstFrame.h) / def.imageHeight);
+            } else {
+                if (def.uvTilingX || def.uvTilingY) {
+                    tex.repeat.set(def.uvTilingX || 1, def.uvTilingY || 1);
+                }
+                if (def.uvOffsetX || def.uvOffsetY) {
+                    tex.offset.set(def.uvOffsetX || 0, def.uvOffsetY || 0);
+                }
             }
             matParams.map = tex;
             matParams.color = new THREE.Color(0xffffff);
@@ -506,6 +675,19 @@ export class RoomManager {
             targetSpawnId: def.targetSpawnId || '',
             interactionState: def.interactionState || 'open'
         });
+
+        if (def.atlasFrames && def.imageWidth && def.imageHeight && def.atlasFrames.length > 0) {
+            this.world.addComponent(entity, 'AtlasAnimation', {
+                frames: def.atlasFrames,
+                imageWidth: def.imageWidth,
+                imageHeight: def.imageHeight,
+                currentFrame: 0,
+                frameRate: def.fps ?? 12,
+                timeAccumulator: 0,
+                loop: def.loop ?? true,
+                autoplay: def.autoplay ?? true,
+            } satisfies AtlasAnimation);
+        }
     }
 
     /**
@@ -568,6 +750,14 @@ export class RoomManager {
             if ((obj as any).isRoomLight) lightsToRemove.push(obj);
         });
         lightsToRemove.forEach(l => this.scene.remove(l));
+
+        // Stop and remove all room audio
+        for (const audio of this.roomAudioElements) {
+            audio.pause();
+            audio.src = '';
+            if (audio.parentNode) audio.parentNode.removeChild(audio);
+        }
+        this.roomAudioElements = [];
 
         this.currentRoomId = null;
     }

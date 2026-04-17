@@ -92,7 +92,13 @@ export class EntityFactory {
         let tex = this.textureCache.get(entity.textureSource);
         if (!tex) {
            const loader = new THREE.TextureLoader();
-           tex = loader.load(`/assets/textures/${entity.textureSource}.jpg`); // Hardcode jpg for door.jpg, wait, maybe just append extension if not present
+           // if it's from the content browser, it might already include 'sprites/' or 'textures/'
+           let path = entity.textureSource;
+           if (!path.startsWith('sprites/') && !path.startsWith('textures/')) {
+             const dir = entity.type === 'animated_sprite' ? 'sprites/' : 'textures/';
+             path = `${dir}${path}`;
+           }
+           tex = loader.load(`/assets/${path}`);
            this.textureCache.set(entity.textureSource, tex);
         }
         matArgs.map = tex;
@@ -140,12 +146,22 @@ export class EntityFactory {
     };
 
     // Apply static texture if materialType is 'textured' or 'sequence'
-    if ((entity.materialType === 'textured' || entity.materialType === 'sequence') && entity.textureSource) {
-      const texSrc = entity.materialType === 'sequence' && entity.sequenceSource ? entity.sequenceSource : entity.textureSource;
+    const textureKey = entity.materialType === 'sequence' && entity.sequenceSource ? entity.sequenceSource : entity.textureSource;
+    if ((entity.materialType === 'textured' || entity.materialType === 'sequence') && textureKey) {
+      const texSrc = textureKey;
       let tex = this.textureCache.get(texSrc);
       if (!tex) {
         const loader = new THREE.TextureLoader();
-        tex = loader.load(`/assets/textures/${texSrc}`);
+        const path = texSrc.startsWith('textures/') || texSrc.startsWith('sprites/')
+          ? texSrc
+          : (entity.materialType === 'sequence' ? `sprites/${texSrc}` : `textures/${texSrc}`);
+        
+        // Ensure we handle the .png if only a .json name was provided for a sequence
+        const finalPath = (entity.materialType === 'sequence' && !path.endsWith('.png') && !path.endsWith('.jpg'))
+            ? path.replace('.json', '.png').replace(/\.[^.]+$/, '.png')
+            : path;
+            
+        tex = loader.load(`/assets/${finalPath}`);
         tex.wrapS = THREE.RepeatWrapping;
         tex.wrapT = THREE.RepeatWrapping;
         this.textureCache.set(texSrc, tex);
@@ -395,7 +411,11 @@ export class EntityFactory {
       let tex = this.textureCache.get(entity.textureSource);
       if (!tex) {
         const loader = new THREE.TextureLoader();
-        tex = loader.load(`/assets/textures/${entity.textureSource}`);
+        // If it starts with 'textures/' or 'sprites/', don't double up
+        const path = entity.textureSource.startsWith('textures/') || entity.textureSource.startsWith('sprites/') 
+            ? entity.textureSource 
+            : `textures/${entity.textureSource}`;
+        tex = loader.load(`/assets/${path}`);
         tex.wrapS = THREE.RepeatWrapping;
         tex.wrapT = THREE.RepeatWrapping;
         this.textureCache.set(entity.textureSource, tex);

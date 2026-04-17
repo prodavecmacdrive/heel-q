@@ -36,6 +36,26 @@ export interface EntitySpawnDef {
     interactionState?: string;
     /** Links to the WorldProject.doors[].id for portal matching */
     portalId?: string;
+    /** For animated_sprite: Texture Packer atlas JSON filename (e.g. "customer.json") */
+    sequenceJson?: string;
+    /** For animated_sprite: sprite/atlas source image identifier (same key used in TextureManager) */
+    sequenceSource?: string;
+    /** Pre-parsed Texture Packer atlas frames (pixel coordinates) — populated during preload */
+    atlasFrames?: Array<{x: number; y: number; w: number; h: number}>;
+    /** Atlas sheet dimensions (populated during preload) */
+    imageWidth?: number;
+    imageHeight?: number;
+    /** Animation playback */
+    fps?: number;
+    loop?: boolean;
+    autoplay?: boolean;
+    /** For uniform-grid sprite sheets (fallback when no atlas JSON is present) */
+    sheetColumns?: number;
+    sheetRows?: number;
+    /** For sound entities */
+    audioSource?: string;
+    volume?: number;
+    spatialAudio?: boolean;
 }
 
 export interface CameraDef {

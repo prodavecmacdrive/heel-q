@@ -1,5 +1,6 @@
 import { System } from '../ecs/System';
 import { World } from '../ecs/World';
+import * as THREE from 'three';
 import { Player, Transform, SpriteAnimation } from '../ecs/Component';
 import { RoomManager } from '../rooms/RoomManager';
 import { RoomData } from '../rooms/RoomData';
@@ -69,37 +70,54 @@ export class PortalSystem extends System {
 
                 let spawnPos = portal.spawnPosition || {x: 0, y: 0, z: 0};
                 if (portal.targetSpawnId && nextRoom.spawnPoints) {
+                    // Use explicitly designated spawn point
                     const sp = nextRoom.spawnPoints.find(s => s.id === portal.targetSpawnId);
                     if (sp) spawnPos = sp.position;
                 } else if (portal.id && nextRoom.portals) {
-                    // Try to find the matching door portal in the next room
+                    // Land next to the matching door in the target room, clamped to
+                    // the nav grid so the player always starts in a walkable cell.
                     const matchingPortal = nextRoom.portals.find(p => p.id === portal.id);
                     if (matchingPortal) {
-                        // Offset slightly inside the room so we don't immediately re-trigger
-                        spawnPos = { 
-                            x: matchingPortal.position.x, 
-                            y: matchingPortal.position.y, 
-                            z: matchingPortal.position.z 
-                        };
-                        // We could add a small offset here based on the door normal if we had it,
-                        // but for now, the transition flag handles immediate re-triggers.
+                        // Clamp door position to the nearest walkable cell so the
+                        // player doesn't spawn inside the door's obstacle stamp.
+                        const raw = new THREE.Vector3(
+                            matchingPortal.position.x,
+                            0,
+                            matchingPortal.position.z
+                        );
+                        const clamped = this.roomManager.navGrid.clamp(raw);
+                        spawnPos = { x: clamped.x, y: matchingPortal.position.y, z: clamped.z };
+                    } else if (nextRoom.spawnPoints && nextRoom.spawnPoints.length > 0) {
+                        spawnPos = nextRoom.spawnPoints[0].position;
                     }
-                } else if (!portal.spawnPosition && nextRoom.spawnPoints && nextRoom.spawnPoints.length > 0) {
+                } else if (nextRoom.spawnPoints && nextRoom.spawnPoints.length > 0) {
                     spawnPos = nextRoom.spawnPoints[0].position;
                 }
 
                 // 2-5. RoomManager handles teardown/rebuild with player preservation
                 this.roomManager.loadRoom(nextRoom).then(() => {
                     // 6. Snap player feet to spawn point
+                    // After loadRoom the navGrid is rebuilt — clamp again to the
+                    // updated grid so we never strand the player in a blocked cell.
+                    const nav = this.roomManager.navGrid;
+                    const clampedFinal = nav.clamp(
+                        new THREE.Vector3(spawnPos.x, 0, spawnPos.z)
+                    );
+
                     const t = this.world.getComponent(playerEntity, 'Transform') as Transform;
                     const p = this.world.getComponent(playerEntity, 'Player') as Player;
-                    t.position.x = spawnPos.x;
-                    t.position.z = spawnPos.z;
+                    t.position.x = clampedFinal.x;
+                    t.position.z = clampedFinal.z;
                     t.position.y = p.floorY;
                     p.path = [];
                     p.isMoving = false;
 
                     this.transitioning = false;
+                }).catch((err: unknown) => {
+                    // Room load failed — reset so future portal clicks still work
+                    console.error('PortalSystem: loadRoom failed, resetting transition state', err);
+                    this.transitioning = false;
+                    player.pendingPortalId = null;
                 });
                 } // <--- Added missing brace here
 

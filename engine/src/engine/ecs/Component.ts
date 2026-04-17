@@ -91,6 +91,16 @@ export interface Obstacle {
 export interface DoorMarker {
     portalId: string;
     targetRoom: string;
+    targetSpawnId?: string;
+    interactionState?: string;
+}
+
+/** Tags a camera entity for multi-camera room switching */
+export interface CameraMarker {
+    cameraIndex: number;
+    isDefault: boolean;
+    targetLookAt: string;
+    fov: number;
 }
 
 // ─── Component registry ───────────────────────────────────────────
@@ -108,6 +118,7 @@ export interface ComponentRegistry {
     'FloorMarker': FloorMarker;
     'Obstacle': Obstacle;
     'DoorMarker': DoorMarker;
+    'CameraMarker': CameraMarker;
 }
 
 export type ComponentName = keyof ComponentRegistry;

@@ -9,6 +9,13 @@ export type BrowserTab = 'assets' | 'primitives' | 'functional';
 export interface DragData {
   entityType: EntityType;
   subType?: string;
+  assetPath?: string;
+}
+
+export interface AssetData {
+  sprites: string[];
+  textures: string[];
+  audio: string[];
 }
 
 export class BottomPanel {
@@ -96,6 +103,7 @@ export class BottomPanel {
         const dragData: DragData = {
           entityType: el.dataset.entityType as EntityType,
           subType: el.dataset.subType || undefined,
+          assetPath: el.dataset.assetPath || undefined,
         };
         (e as DragEvent).dataTransfer!.setData('application/json', JSON.stringify(dragData));
         (e as DragEvent).dataTransfer!.effectAllowed = 'copy';
@@ -113,7 +121,7 @@ export class BottomPanel {
     });
   }
 
-  private loadedAssets: any = null;
+  private loadedAssets: AssetData | null = null;
 
   private async fetchAssets() {
     try {
@@ -131,44 +139,65 @@ export class BottomPanel {
 
   private renderAssetsTab(): string {
     if (!this.loadedAssets) {
-      this.fetchAssets(); // Trigger fetch and show loading
+      this.fetchAssets();
       return `<div style="padding: 20px; color: var(--text-muted);">Loading assets...</div>`;
     }
 
     const cards: string[] = [];
 
-    // Map sprites
+    // Textures
+    if (this.loadedAssets.textures) {
+      for (const file of this.loadedAssets.textures) {
+        if (!file.match(/\.(jpg|jpeg|png|webp)$/i)) continue;
+        const name = file.replace(/\.[^/.]+$/, '');
+        cards.push(`
+          <div class="browser-card" draggable="true"
+               data-entity-type="primitive" data-sub-type="cube" data-asset-path="textures/${file}">
+            <div class="browser-card-icon" style="background:linear-gradient(135deg, #3a6b9f, #2a5b8f)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>
+              </svg>
+            </div>
+            <span class="browser-card-label">${name}</span>
+            <span class="browser-card-tag">texture</span>
+          </div>
+        `);
+      }
+    }
+
+    // Sprites
     if (this.loadedAssets.sprites) {
       for (const file of this.loadedAssets.sprites) {
-        if (!file.endsWith('.png')) continue;
-        const name = file.replace('.png', '');
-        // If there's a corresponding .json, it's an animated sprite
-        const isAnim = this.loadedAssets.sprites.includes(`${name}.json`);
-        const type = isAnim ? 'animated_sprite' : 'sprite';
-        const color = isAnim ? '#4a8a5f' : '#3a6b9f';
+        if (!file.match(/\.(png|jpg|jpeg|webp)$/i)) continue;
+        const name = file.replace(/\.[^/.]+$/, '');
+        const hasJson = this.loadedAssets.sprites.includes(`${name}.json`);
+        const type = hasJson ? 'animated_sprite' : 'sprite';
+        const color = hasJson ? '#4a8a5f' : '#3a6b9f';
+        const tag = hasJson ? 'animated' : 'sprite';
 
         cards.push(`
           <div class="browser-card" draggable="true"
-               data-entity-type="${type}" data-sub-type="${name}">
+               data-entity-type="${type}" data-sub-type="${name}" data-asset-path="sprites/${file}">
             <div class="browser-card-icon" style="background:linear-gradient(135deg, ${color}, ${this.darken(color)})">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>
               </svg>
             </div>
             <span class="browser-card-label">${name}</span>
+            <span class="browser-card-tag">${tag}</span>
           </div>
         `);
       }
     }
 
-    // Map audio
+    // Audio
     if (this.loadedAssets.audio) {
       for (const file of this.loadedAssets.audio) {
-        if (!file.endsWith('.mp3') && !file.endsWith('.ogg') && !file.endsWith('.wav')) continue;
-        const name = file.replace(/\.[^/.]+$/, "");
+        if (!file.match(/\.(mp3|ogg|wav|flac)$/i)) continue;
+        const name = file.replace(/\.[^/.]+$/, '');
         cards.push(`
           <div class="browser-card" draggable="true"
-               data-entity-type="sound" data-sub-type="${name}">
+               data-entity-type="sound" data-sub-type="${name}" data-asset-path="audio/${file}">
             <div class="browser-card-icon" style="background:linear-gradient(135deg, #a48232, #7a5f20)">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
@@ -176,9 +205,14 @@ export class BottomPanel {
               </svg>
             </div>
             <span class="browser-card-label">${name}</span>
+            <span class="browser-card-tag">audio</span>
           </div>
         `);
       }
+    }
+
+    if (cards.length === 0) {
+      return `<div style="padding: 20px; color: var(--text-muted);">No assets found. Add files to the <code>assets/</code> directory.</div>`;
     }
 
     return `<div class="browser-grid">${cards.join('')}</div>`;

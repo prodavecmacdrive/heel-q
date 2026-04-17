@@ -26,7 +26,25 @@ async function bootstrap() {
         // Map the new WorldProject format to the engine's registerRooms (which expects MapScene shape)
         // Note: the engine currently expects MapScene shape, so we format RoomData to look like MapScene 
         // Helper to extract component-based entities to properties
-        const extractCamera = (entities: any[]) => {
+        const extractCameras = (entities: any[]) => {
+            const cams = entities.filter(e => e.type === 'camera');
+            return cams.map((cam: any, i: number) => ({
+                id: cam.id || `camera_${i}`,
+                position: cam.transform.position,
+                rotation: {
+                    x: cam.transform.rotation.x * Math.PI / 180,
+                    y: cam.transform.rotation.y * Math.PI / 180,
+                    z: cam.transform.rotation.z * Math.PI / 180
+                },
+                fov: cam.fov || 45,
+                near: cam.near || 0.1,
+                far: cam.far || 100,
+                isDefault: cam.isDefault ?? (i === 0),
+                targetLookAt: cam.lookAtTarget || ''
+            }));
+        };
+
+        const extractLegacyCamera = (entities: any[]) => {
             const cam = entities.find(e => e.type === 'camera');
             if (cam) return { 
                 position: cam.transform.position, 
@@ -41,10 +59,18 @@ async function bootstrap() {
             };
             return { 
                 position: { x:-8, y:10, z:12 }, 
-                rotation: { x: -35 * Math.PI / 180, y: 35 * Math.PI / 180, z: 0 }, // fallback
+                rotation: { x: -35 * Math.PI / 180, y: 35 * Math.PI / 180, z: 0 },
                 fov: 45,
                 near: 0.1,
                 far: 100
+            };
+        };
+
+        const extractSpawnCharacter = (entities: any[]) => {
+            const spawn = entities.find(e => e.type === 'spawn');
+            return {
+                characterSpeed: spawn?.characterSpeed,
+                characterAsset: spawn?.characterAsset
             };
         };
 
@@ -72,60 +98,84 @@ async function bootstrap() {
             return portals;
         };
 
-        const mappedRooms = worldData.rooms.map((r: any) => ({
-           id: r.id,
-           name: r.name,
-           ambientColor: r.ambientColor || '#ffffff',
-           walkPadding: 0.5,
-           spawnPoints: r.spawnPoints,
-           outline: r.outline,
-           entities: r.entities
-              .filter((e: any) => e.type === 'sprite' || e.type === 'animated_sprite' || e.type === 'primitive' || e.type === 'light')
-              .map((e: any) => {
-               const result: any = {
-                   entityType: e.type,
-                   spriteKey: '',
-                   width: e.transform.scale.x,
-                   height: e.transform.scale.y,
-                   position: e.transform.position,
-                   rotation: e.transform.rotation,
-                   scale: e.transform.scale,
-                   isObstacle: false
-               };
+        const mappedRooms = worldData.rooms.map((r: any) => {
+           const legacyCam = extractLegacyCamera(r.entities);
+           const spawnChar = extractSpawnCharacter(r.entities);
+           return {
+              id: r.id,
+              name: r.name,
+              ambientColor: r.ambientColor || '#ffffff',
+              walkPadding: 0.5,
+              spawnPoints: r.spawnPoints,
+              outline: r.outline,
+              entities: r.entities
+                 .filter((e: any) => e.type === 'sprite' || e.type === 'animated_sprite' || e.type === 'primitive' || e.type === 'light' || e.type === 'door')
+                 .map((e: any) => {
+                  const result: any = {
+                      entityType: e.type,
+                      spriteKey: '',
+                      width: e.transform.scale.x,
+                      height: e.transform.scale.y,
+                      position: e.transform.position,
+                      rotation: e.transform.rotation,
+                      scale: e.transform.scale,
+                      isObstacle: false
+                  };
 
-               // Type-specific fields
-               if (e.type === 'primitive') {
-                   result.geometryType = e.geometryType || 'cube';
-                   result.color = e.color || '#808080';
-                   result.opacity = e.opacity ?? 1;
-                   result.isObstacle = e.isCollider ?? false;
-               } else if (e.type === 'light') {
-                   result.lightType = e.lightType || 'point';
-                   result.lightColor = e.color || '#ffffff';
-                   result.lightIntensity = e.intensity ?? 1;
-                   result.lightDistance = e.distance ?? 10;
-               } else {
-                   // sprite or animated_sprite
-                   result.spriteKey = e.textureSource || e.spriteKey || '';
-               }
+                  if (e.type === 'primitive') {
+                      result.geometryType = e.geometryType || 'cube';
+                      result.color = e.color || '#808080';
+                      result.opacity = e.opacity ?? 1;
+                      result.isObstacle = e.isCollider ?? false;
+                      result.textureSource = e.textureSource || '';
+                      result.uvTilingX = e.uvTilingX ?? 1;
+                      result.uvTilingY = e.uvTilingY ?? 1;
+                      result.uvOffsetX = e.uvOffsetX ?? 0;
+                      result.uvOffsetY = e.uvOffsetY ?? 0;
+                  } else if (e.type === 'light') {
+                      result.lightType = e.lightType || 'point';
+                      result.lightColor = e.color || '#ffffff';
+                      result.lightIntensity = e.intensity ?? 1;
+                      result.lightDistance = e.distance ?? 10;
+                  } else if (e.type === 'door') {
+                      result.targetRoomId = e.targetRoomId || '';
+                      result.targetSpawnId = e.targetSpawnId || '';
+                      result.interactionState = e.interactionState || 'closed';
+                      result.color = e.color || '#8B4513';
+                      result.opacity = e.opacity ?? 1;
+                      result.textureSource = e.textureSource || '';
+                      result.uvTilingX = e.uvTilingX ?? 1;
+                      result.uvTilingY = e.uvTilingY ?? 1;
+                      result.uvOffsetX = e.uvOffsetX ?? 0;
+                      result.uvOffsetY = e.uvOffsetY ?? 0;
+                      result.isObstacle = true;
+                      // Wire door entity to its portal for PortalSystem collision matching
+                      result.portalId = e.worldDoorId || '';
+                  } else {
+                      result.spriteKey = e.textureSource || e.spriteKey || '';
+                  }
 
-               return result;
-           }),
-           boundaries: {
-              floor: {
-                  width: 100, depth: 100,
-                  texture: 'floor_default',
-                  position: { x:0, y:0, z:0 }
+                  return result;
+              }),
+              boundaries: {
+                 floor: {
+                     width: 100, depth: 100,
+                     texture: 'floor_default',
+                     position: { x:0, y:0, z:0 }
+                 },
+                 walls: [] 
               },
-              walls: [] 
-           },
-           portals: mapPortals(r.id), 
-           cameraPosition: extractCamera(r.entities).position,
-           cameraRotation: extractCamera(r.entities).rotation,
-           cameraFov: extractCamera(r.entities).fov,
-           cameraNear: extractCamera(r.entities).near,
-           cameraFar: extractCamera(r.entities).far
-        }));
+              portals: mapPortals(r.id),
+              cameras: extractCameras(r.entities),
+              cameraPosition: legacyCam.position,
+              cameraRotation: legacyCam.rotation,
+              cameraFov: legacyCam.fov,
+              cameraNear: legacyCam.near,
+              cameraFar: legacyCam.far,
+              characterSpeed: spawnChar.characterSpeed,
+              characterAsset: spawnChar.characterAsset
+           };
+        });
         
         engine.registerRooms(mappedRooms);
         engine.start();

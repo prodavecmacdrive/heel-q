@@ -10,7 +10,7 @@ export interface EntitySpawnDef {
     /** XZ half-extents for obstacle blocking (defaults to width/2 × 0.5) */
     obstacleHalfWidth?: number;
     obstacleHalfDepth?: number;
-    /** Entity type from editor: 'sprite' | 'animated_sprite' | 'primitive' | 'light' */
+    /** Entity type from editor: 'sprite' | 'animated_sprite' | 'primitive' | 'light' | 'door' */
     entityType?: string;
     /** For primitives: geometry type */
     geometryType?: string;
@@ -18,11 +18,35 @@ export interface EntitySpawnDef {
     color?: string;
     /** For primitives: opacity */
     opacity?: number;
+    /** For primitives: texture source */
+    textureSource?: string;
+    /** For primitives: UV tiling */
+    uvTilingX?: number;
+    uvTilingY?: number;
+    uvOffsetX?: number;
+    uvOffsetY?: number;
     /** For lights: light config */
     lightType?: string;
     lightColor?: string;
     lightIntensity?: number;
     lightDistance?: number;
+    /** For doors */
+    targetRoomId?: string;
+    targetSpawnId?: string;
+    interactionState?: string;
+    /** Links to the WorldProject.doors[].id for portal matching */
+    portalId?: string;
+}
+
+export interface CameraDef {
+    id?: string;
+    position: { x: number; y: number; z: number };
+    rotation: { x: number; y: number; z: number };
+    fov: number;
+    near: number;
+    far: number;
+    isDefault: boolean;
+    targetLookAt: string;
 }
 
 export interface WallDef {
@@ -63,12 +87,20 @@ export interface RoomData {
     entities: EntitySpawnDef[];
     portals: PortalDef[];
     spawnPoints?: SpawnPointDef[];
+    /** Multi-camera array — first camera with isDefault or first added is the active default */
+    cameras: CameraDef[];
+    /** Legacy single camera fields (used as fallback if cameras[] is empty) */
     cameraPosition: { x: number; y: number; z: number };
     cameraRotation: { x: number; y: number; z: number };
     cameraFov?: number;
     cameraNear?: number;
     cameraFar?: number;
+    cameraLookAt?: { x: number; y: number; z: number };
     ambientColor: string;
     /** Inward padding from walls for the navigable area (world units). Default 1.5 */
     walkPadding?: number;
+    /** Character speed from spawn entity */
+    characterSpeed?: number;
+    /** Character asset source */
+    characterAsset?: string;
 }

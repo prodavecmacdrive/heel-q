@@ -15,6 +15,7 @@ import { PortalSystem } from './systems/PortalSystem';
 import { InputSystem } from './systems/InputSystem';
 import { AnimationSystem } from './systems/AnimationSystem';
 import { DepthSortSystem } from './systems/DepthSortSystem';
+import { CameraSystem } from './systems/CameraSystem';
 
 export class Engine {
     private world: World;
@@ -79,6 +80,9 @@ export class Engine {
         this.world.addSystem(new SpriteSystem(this.world, this.camera));
         this.world.addSystem(new DepthSortSystem(this.world));
         this.world.addSystem(new PixelSnapSystem(this.world));
+        this.world.addSystem(
+            new CameraSystem(this.world, this.camera, this.roomManager)
+        );
 
         // 4. Render (last)
         this.world.addSystem(

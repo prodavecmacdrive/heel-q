@@ -11,7 +11,7 @@ export class PlaceholderGenerator {
         this.generateFloorCheckerboard(textureManager);
         this.generateBrickWall(textureManager, 'wall_dark', '#4A2A2A', '#2A2A3A');
         this.generateBrickWall(textureManager, 'wall_hallway', '#5A3030', '#3A2A2A');
-        this.generateBrickWall(textureManager, 'door', '#6B4423', '#3D2812');
+        // 'door' placeholder texture removed — doors use their own textureSource field
         this.generateCharacterSheet(textureManager, 'elias_sheet', '#D4A574', '#2B2B3C', '#1A1A28');
         this.generateCharacterSheet(textureManager, 'vance_sheet', '#8B7355', '#3C2B2B', '#281A1A');
         this.generateDogSheet(textureManager, 'dog_sheet', '#C4956A');

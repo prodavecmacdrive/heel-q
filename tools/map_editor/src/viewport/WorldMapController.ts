@@ -16,6 +16,7 @@ export class WorldMapController {
   
   private world: WorldProject;
   private onRoomSelect: (roomId: string) => void;
+  private onDoorCreated: ((doorId: string, midX: number, midZ: number, room1Id: string, room2Id: string | null, dirX: number, dirZ: number, halfLen: number) => void) | null = null;
 
   private isDrawing = false;
   private currentTool: string = 'select';
@@ -32,12 +33,16 @@ export class WorldMapController {
     this.viewport = viewport;
     this.world = world;
     this.onRoomSelect = onRoomSelect;
-    
+
     this.sceneGroup.name = '__world_map_group';
     this.viewport.scene.add(this.sceneGroup);
     this.sceneGroup.visible = false;
 
     this.sceneGroup.add(this.vertexGroups);
+  }
+
+  public setOnDoorCreated(cb: (doorId: string, midX: number, midZ: number, room1Id: string, room2Id: string | null, dirX: number, dirZ: number, halfLen: number) => void) {
+    this.onDoorCreated = cb;
   }
 
   public activate() {
@@ -241,7 +246,15 @@ export class WorldMapController {
 
   private finishDrawingDoor() {
     if (this.points.length < 2) return;
-    
+
+    // Compute wall direction from the two drawn endpoints
+    const rawDx = this.points[1].x - this.points[0].x;
+    const rawDz = this.points[1].z - this.points[0].z;
+    const len = Math.sqrt(rawDx * rawDx + rawDz * rawDz);
+    const dirX = len > 0.001 ? rawDx / len : 1;
+    const dirZ = len > 0.001 ? rawDz / len : 0;
+    const halfLen = len / 2;
+
     const door = {
       id: 'door_' + Date.now(),
       points: [
@@ -249,7 +262,7 @@ export class WorldMapController {
          { x: this.points[1].x, y: this.points[1].z }
       ] as [Vec2, Vec2],
       room1Id: '',
-      room2Id: null,
+      room2Id: null as string | null,
       width: 1,
       texture: 'door_default'
     };
@@ -308,6 +321,10 @@ export class WorldMapController {
     this.world.doors.push(door);
     this.cancelDrawing();
     this.rebuildRooms();
+
+    if (this.onDoorCreated) {
+      this.onDoorCreated(door.id, cx, cy, door.room1Id, door.room2Id, dirX, dirZ, halfLen);
+    }
   }
 
   private cancelDrawing() {
@@ -336,7 +353,7 @@ export class WorldMapController {
     }
   }
 
-  private rebuildRooms() {
+  rebuildRooms() {
     // Clear old
     for (const mesh of this.roomMeshes.values()) {
       this.sceneGroup.remove(mesh);

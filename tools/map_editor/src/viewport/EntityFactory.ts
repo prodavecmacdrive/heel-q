@@ -13,6 +13,7 @@ import type {
   SpawnEntity,
   SpriteEntity,
   AnimatedSpriteEntity,
+  DoorEntity,
 } from '../types/entities';
 
 /**
@@ -48,6 +49,9 @@ export class EntityFactory {
         break;
       case 'spawn':
         obj = this.createSpawnHelper(entity);
+        break;
+      case 'door':
+        obj = this.createDoorHelper(entity);
         break;
     }
 
@@ -126,14 +130,33 @@ export class EntityFactory {
     }
 
     const color = new THREE.Color(entity.color);
-    const mat = new THREE.MeshStandardMaterial({
+    const matParams: THREE.MeshStandardMaterialParameters = {
       color,
       transparent: true,
       opacity: entity.opacity,
       roughness: 0.6,
       metalness: 0.1,
       wireframe: entity.materialType === 'invisible',
-    });
+    };
+
+    // Apply static texture if materialType is 'textured' or 'sequence'
+    if ((entity.materialType === 'textured' || entity.materialType === 'sequence') && entity.textureSource) {
+      const texSrc = entity.materialType === 'sequence' && entity.sequenceSource ? entity.sequenceSource : entity.textureSource;
+      let tex = this.textureCache.get(texSrc);
+      if (!tex) {
+        const loader = new THREE.TextureLoader();
+        tex = loader.load(`/assets/textures/${texSrc}`);
+        tex.wrapS = THREE.RepeatWrapping;
+        tex.wrapT = THREE.RepeatWrapping;
+        this.textureCache.set(texSrc, tex);
+      }
+      tex.repeat.set(entity.uvTilingX || 1, entity.uvTilingY || 1);
+      tex.offset.set(entity.uvOffsetX || 0, entity.uvOffsetY || 0);
+      matParams.map = tex;
+      matParams.color = new THREE.Color(0xffffff);
+    }
+
+    const mat = new THREE.MeshStandardMaterial(matParams);
 
     const mesh = new THREE.Mesh(geo, mat);
     mesh.castShadow = entity.opacity > 0.5;
@@ -346,6 +369,70 @@ export class EntityFactory {
     ]);
     const dirArrow = new THREE.Line(dirGeo, new THREE.LineBasicMaterial({ color: 0xaaaaff }));
     group.add(dirArrow);
+
+    return group;
+  }
+
+  // ── Door Helper ────────────────────────────────────────────────────
+
+  private createDoorHelper(entity: DoorEntity): THREE.Object3D {
+    // Use a Group so entity.transform.position is at the door's BASE (floor),
+    // while the box mesh sits offset at local y=0.5 inside the group.
+    // When group.scale.y = doorHeight, the mesh spans [0 .. doorHeight] in world Y.
+    const group = new THREE.Group();
+
+    const geo = new THREE.BoxGeometry(1, 1, 1);
+    const color = new THREE.Color(entity.color || '#6B4423');
+    const matParams: THREE.MeshStandardMaterialParameters = {
+      color,
+      transparent: entity.opacity < 1,
+      opacity: entity.opacity,
+      roughness: 0.7,
+      metalness: 0.1,
+    };
+
+    if (entity.textureSource) {
+      let tex = this.textureCache.get(entity.textureSource);
+      if (!tex) {
+        const loader = new THREE.TextureLoader();
+        tex = loader.load(`/assets/textures/${entity.textureSource}`);
+        tex.wrapS = THREE.RepeatWrapping;
+        tex.wrapT = THREE.RepeatWrapping;
+        this.textureCache.set(entity.textureSource, tex);
+      }
+      tex.repeat.set(entity.uvTilingX || 1, entity.uvTilingY || 1);
+      tex.offset.set(entity.uvOffsetX || 0, entity.uvOffsetY || 0);
+      matParams.map = tex;
+      matParams.color = new THREE.Color(0xffffff);
+    }
+
+    const mat = new THREE.MeshStandardMaterial(matParams);
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    // Offset so the bottom of the unit-box is at the group's origin (floor level).
+    // With group.scale.y applied, the box spans 0 → scale.y in world Y.
+    mesh.position.y = 0.5;
+
+    // Wireframe edges
+    const edges = new THREE.LineSegments(
+      new THREE.EdgesGeometry(geo),
+      new THREE.LineBasicMaterial({ color: 0xff6600, transparent: true, opacity: 0.4 })
+    );
+    mesh.add(edges);
+
+    group.add(mesh);
+
+    // State indicator — small sphere at the top-right of the group (normalized coords)
+    const stateColor = entity.interactionState === 'locked' ? 0xff4444 :
+                        entity.interactionState === 'closed' ? 0xffaa00 : 0x44ff44;
+    const indicatorGeo = new THREE.SphereGeometry(0.08, 8, 8);
+    const indicatorMat = new THREE.MeshBasicMaterial({ color: stateColor });
+    const indicator = new THREE.Mesh(indicatorGeo, indicatorMat);
+    // Group-local position: right edge (0.6), near top (0.9), front face (0.6).
+    // World position = group.scale * this = (0.6*sx, 0.9*sy, 0.6*sz).
+    indicator.position.set(0.6, 0.9, 0.6);
+    group.add(indicator);
 
     return group;
   }

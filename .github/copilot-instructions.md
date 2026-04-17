@@ -37,7 +37,9 @@ All gameplay logic uses a custom ECS in `engine/ecs/`:
   - `Player` – path (waypoint queue), speed, isMoving flag, floorY, pendingPortalId.
   - `SpriteAnimation` – columns, rows, totalFrames, currentFrame, frameRate, state ('idle' | 'walk'), stateFrames map.
   - `Collider`, `Portal`, `Interactable`, `RoomMember` – gameplay markers.
-  - `FloorMarker`, `Obstacle`, `DoorMarker` – boolean tag components (marker pattern).
+  - `FloorMarker`, `Obstacle` – boolean tag components (marker pattern).
+  - `DoorMarker` – door entity marker with `targetRoomId`, `targetSpawnId`, `interactionState` ('open' | 'closed' | 'locked').
+  - `CameraMarker` – multi-camera entity marker with `cameraIndex`, `isDefault`, `targetLookAt` (entity ID), `fov`.
 - **System** (`System.ts`): Abstract base with `update(dt, entities?)`. All systems hold a `World` ref.
 - **World** (`World.ts`): Sparse component storage (`Map<ComponentName, Map<Entity, Data>>`). Deferred entity deletion. Type-safe `addComponent<T>()` / `getComponent<T>()` via `ComponentRegistry`.
 
@@ -48,8 +50,9 @@ All gameplay logic uses a custom ECS in `engine/ecs/`:
 4. **AnimationSystem** – ticks sprite-sheet frame counter; updates UV offsets (row-major layout, bottom-left origin correction).
 5. **SpriteSystem** – billboarding (`mesh.quaternion = camera.quaternion`), discrete Z-depth scaling (quantized 0.05 steps), feet-first Y offset.
 6. **DepthSortSystem** – sets `renderOrder = round(feetZ × 1000)`, disables depthTest on sprite materials.
-7. **PixelSnapSystem** – snaps positions to `1/PIXEL_RATIO` (1/8 world unit) grid.
-8. **RenderSystem** – calls `PixelRenderer.render()`.
+7. **CameraSystem** – multi-camera management; number key switching (1-9); LookAt target tracking; room change detection.
+8. **PixelSnapSystem** – snaps positions to `1/PIXEL_RATIO` (1/8 world unit) grid.
+9. **RenderSystem** – calls `PixelRenderer.render()`.
 
 ### Rendering Pipeline (`engine/rendering/`)
 - **PixelRenderer**: Two-pass low-res → upscale pipeline.
@@ -67,15 +70,19 @@ All gameplay logic uses a custom ECS in `engine/ecs/`:
   - Fallback: returns goal position if no path found.
 
 ### Room Management (`engine/rooms/`)
-- **RoomData**: Type interface for room schema – boundary outline, entities, portals, camera, spawn points.
+- **RoomData**: Type interface for room schema – boundary outline, entities, portals, `cameras: CameraDef[]`, spawn points, `characterSpeed`, `characterAsset`.
+- **CameraDef**: Multi-camera definition – `id`, `position`, `rotation`, `fov`, `near`, `far`, `isDefault`, `targetLookAt` (empty string = use euler rotation, entity ID = track target).
 - **RoomManager**: Builds room scene from RoomData:
   1. Preserves existing Player entity across loads.
-  2. Sets camera position/rotation/FOV from room data.
+  2. Spawns camera entities from `cameras[]` array; applies default camera; falls back to legacy single-camera fields.
   3. Generates ShapeGeometry floor + wall planes from vectorized outline.
   4. Builds NavGrid, stamps obstacles.
-  5. Spawns entities by type (primitive geometry, lights, sprites with sheet metadata).
+  5. Spawns entities by type (primitive geometry, lights, sprites with sheet metadata, **3D door entities**).
   6. Creates door meshes for portals.
-  7. Spawns or repositions player at spawn point.
+  7. Spawns or repositions player at spawn point; applies `characterSpeed` / `characterAsset` from room data.
+  - `spawnDoorEntity3D()` – creates BoxGeometry door with texture/UV support and DoorMarker component.
+  - `spawnCameraEntity()` – creates ECS entity with CameraMarker.
+  - `applyCameraDef()` – sets camera position/rotation/FOV from CameraDef.
   - Sprite sheet metadata is hardcoded in `SHEET_META` for known sheets (elias, vance, dog, scifi).
 
 ### Error Hierarchy (`engine/errors/`)
@@ -101,10 +108,14 @@ All gameplay logic uses a custom ECS in `engine/ecs/`:
 Manages all state: `WorldProject`, `activeRoom`, `currentMode`, `entityMap`, `meshMap`.
 - **Modes**: `'world'` (orthographic top-down room layout), `'room'` (perspective 3D entity placement), `'height'` (stub).
 - **Key methods**: `selectRoom()`, `rebuildRoomView()`, `rebuildFloorAndWalls()`, `addEntity()`, `removeEntity()`, `handleMenuAction()`, `handleToolChange()`, `addEntityFromBrowser()`.
+- **Flight mode**: `enterFlightMode()` / `exitFlightMode()` – possess a camera entity for WYSIWYG framing. WASD movement, mouse look with pointer lock, Escape to exit. Saves camera transform back to entity on exit.
 - Rotation stored in **degrees** internally; converted to radians for Three.js.
 
 ### Type System (`types/`)
-- **entities.ts**: Discriminated union – `EntityType = 'sprite' | 'animated_sprite' | 'primitive' | 'camera' | 'light' | 'sound' | 'trigger' | 'spawn'`. Each has typed properties. `Vec3 { x, y, z }` used for JSON-safe vectors.
+- **entities.ts**: Discriminated union – `EntityType = 'sprite' | 'animated_sprite' | 'primitive' | 'camera' | 'light' | 'sound' | 'trigger' | 'spawn' | 'door'`. Each has typed properties. `Vec3 { x, y, z }` used for JSON-safe vectors.
+  - `DoorEntity` – 3D door with `targetRoomId`, `targetSpawnId`, `interactionState` ('open' | 'closed' | 'locked'), material/texture/UV fields.
+  - `PrimitiveEntity` – expanded with `textureSource`, `uvTilingX/Y`, `uvOffsetX/Y`, sequence animation fields.
+  - `SpawnEntity` – expanded with `characterSpeed`, `characterAsset`, `actionMapping` (idle/walk/interact/run).
   - Factory: `createDefaultEntity(type)` returns type-specific defaults.
   - `generateId(prefix)` – timestamp-based unique IDs.
 - **scene.ts**: `RoomData` (outline `Vec2[]`, entities, spawnPoints, ambientColor, walkPadding), `DoorDef` (two-point line segment, adjacent room IDs), `WorldProject` (version, projectId, rooms, doors, activeRoomId).
@@ -123,7 +134,7 @@ All panels are self-contained classes; data flows through EditorApp callbacks.
 | **TopPanel** | `TopPanel.ts` | Mode switcher (Room / Height / World) with SVG icons |
 | **LeftPanel** | `LeftPanel.ts` | Tool buttons (select/translate/rotate/scale/room/door) with keyboard shortcuts (Q/W/E/R/A/D); paint & terrain stubs |
 | **RightPanel** | `RightPanel.ts` | Property inspector: entity metadata, type-specific fields, Vec3 grids, color pickers, collapsible sections, delete button |
-| **BottomPanel** | `BottomPanel.ts` | Content browser tabs (Assets / Primitives / Functional); draggable cards; async asset fetching from `/api/assets` |
+| **BottomPanel** | `BottomPanel.ts` | Content browser tabs (Assets / Primitives / Functional); draggable cards; async asset fetching from `/api/assets`; dynamic population of textures/sprites/audio with type tags |
 
 ### Viewport (`viewport/`)
 - **ViewportManager**: Scene, dual camera (perspective + ortho), WebGLRenderer (shadows, AA), OrbitControls, `screenToFloor()` for world map clicks.

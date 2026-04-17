@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { World } from '../ecs/World';
-import { RoomData, EntitySpawnDef } from './RoomData';
+import { RoomData, EntitySpawnDef, CameraDef } from './RoomData';
 import { TextureManager } from '../rendering/TextureManager';
-import { SpriteAnimation, Transform, MeshRenderer, DoorMarker } from '../ecs/Component';
+import { SpriteAnimation, Transform, MeshRenderer, DoorMarker, CameraMarker } from '../ecs/Component';
 import { NavGrid } from '../nav/NavGrid';
 import { Entity } from '../ecs/Entity';
 
@@ -61,34 +61,45 @@ export class RoomManager {
 
         this.currentRoomId = roomData.id;
 
-        // ── 2. Camera ──────────────────────────────────────────────
-        this.camera.position.set(
-            roomData.cameraPosition.x,
-            roomData.cameraPosition.y,
-            roomData.cameraPosition.z
-        );
-
-        if (roomData.cameraRotation) {
-            // Rotation was converted to radians in main.ts
-            this.camera.rotation.set(
-                roomData.cameraRotation.x,
-                roomData.cameraRotation.y,
-                roomData.cameraRotation.z,
-                'XYZ'
+        // ── 2. Camera (multi-camera support) ────────────────────────
+        if (roomData.cameras && roomData.cameras.length > 0) {
+            // Spawn camera entities for multi-camera switching
+            for (let i = 0; i < roomData.cameras.length; i++) {
+                const camDef = roomData.cameras[i];
+                this.spawnCameraEntity(camDef, i);
+            }
+            // Apply the default camera immediately
+            const defaultCam = roomData.cameras.find(c => c.isDefault) || roomData.cameras[0];
+            this.applyCameraDef(defaultCam);
+        } else {
+            // Legacy single-camera fallback
+            this.camera.position.set(
+                roomData.cameraPosition.x,
+                roomData.cameraPosition.y,
+                roomData.cameraPosition.z
             );
-        } else if (roomData.cameraLookAt) {
-            this.camera.lookAt(
-                roomData.cameraLookAt.x,
-                roomData.cameraLookAt.y,
-                roomData.cameraLookAt.z
-            );
-        }
 
-        if (this.camera instanceof THREE.PerspectiveCamera) {
-            if (roomData.cameraFov) this.camera.fov = roomData.cameraFov;
-            if (roomData.cameraNear) this.camera.near = roomData.cameraNear;
-            if (roomData.cameraFar) this.camera.far = roomData.cameraFar;
-            this.camera.updateProjectionMatrix();
+            if (roomData.cameraRotation) {
+                this.camera.rotation.set(
+                    roomData.cameraRotation.x,
+                    roomData.cameraRotation.y,
+                    roomData.cameraRotation.z,
+                    'XYZ'
+                );
+            } else if (roomData.cameraLookAt) {
+                this.camera.lookAt(
+                    roomData.cameraLookAt.x,
+                    roomData.cameraLookAt.y,
+                    roomData.cameraLookAt.z
+                );
+            }
+
+            if (this.camera instanceof THREE.PerspectiveCamera) {
+                if (roomData.cameraFov) this.camera.fov = roomData.cameraFov;
+                if (roomData.cameraNear) this.camera.near = roomData.cameraNear;
+                if (roomData.cameraFar) this.camera.far = roomData.cameraFar;
+                this.camera.updateProjectionMatrix();
+            }
         }
 
         // ── 3. Ambient light ───────────────────────────────────────
@@ -200,12 +211,14 @@ export class RoomManager {
             padding
         );
 
-        // ── 7. Spawn scene entities (props, lights — NOT the player) ───
+        // ── 7. Spawn scene entities (props, lights, doors — NOT the player) ───
         for (const entityDef of roomData.entities) {
             if (entityDef.entityType === 'primitive') {
                 this.spawnPrimitiveEntity(entityDef, floorY);
             } else if (entityDef.entityType === 'light') {
                 this.spawnLightEntity(entityDef);
+            } else if (entityDef.entityType === 'door') {
+                this.spawnDoorEntity3D(entityDef, floorY);
             } else {
                 // sprite or animated_sprite — scene prop, not player
                 this.spawnSpriteEntity(entityDef, floorY, false);
@@ -219,22 +232,22 @@ export class RoomManager {
             }
         }
 
-        // ── 7b. Spawn door entities at portal positions ──────────────
-        for (const portal of (roomData.portals || [])) {
-            this.spawnDoorEntity(portal, floorY);
-        }
+        // ── 7b. Legacy sprite-door step removed — 3D door entities from the editor
+        //        supply both the visual and the DoorMarker.portalId for navigation. ──
 
         // ── 8. Spawn the player from spawnPoints ─────────────────────
         const existingPlayerAfterSpawn = this.findPlayerEntity();
         if (existingPlayerAfterSpawn === null) {
             // No player exists yet — spawn one at the designated spawn point
             let spawnPos = { x: 0, y: 0, z: 2 };
+            let playerSpeed = roomData.characterSpeed ?? 3.0;
+            let playerSpriteKey = roomData.characterAsset || 'scifi_sheet';
             if (roomData.spawnPoints && roomData.spawnPoints.length > 0) {
                 spawnPos = roomData.spawnPoints[0].position;
             }
             this.spawnSpriteEntity(
-                { spriteKey: 'scifi_sheet', width: 2, height: 3, position: spawnPos },
-                floorY, true
+                { spriteKey: playerSpriteKey, width: 2, height: 3, position: spawnPos },
+                floorY, true, playerSpeed
             );
         }
 
@@ -341,7 +354,7 @@ export class RoomManager {
         this.scene.add(light);
     }
 
-    private spawnSpriteEntity(def: EntitySpawnDef, floorY: number, isPlayer: boolean) {
+    private spawnSpriteEntity(def: EntitySpawnDef, floorY: number, isPlayer: boolean, playerSpeed: number = 3.0) {
         const tex = this.textureManager.getTexture(def.spriteKey);
 
         const mat = new THREE.MeshBasicMaterial({
@@ -420,7 +433,7 @@ export class RoomManager {
         if (isPlayer) {
             this.world.addComponent(entity, 'Player', {
                 path: [],
-                speed: 3.0,
+                speed: playerSpeed,
                 isMoving: false,
                 floorY: floorY,
                 pendingPortalId: null
@@ -429,57 +442,105 @@ export class RoomManager {
     }
 
     /**
-     * Spawn a door entity at a portal position (textured with door.jpg).
-     * Adds DoorMarker + Sprite components so it's clickable and billboarded.
+     * Spawn a 3D door entity from the editor's door entity type.
+     * Creates a 3D box instead of a flat plane.
      */
-    private spawnDoorEntity(portal: import('./RoomData').PortalDef, floorY: number) {
-        const doorTex = this.textureManager.getTexture('door');
-        const mat = new THREE.MeshBasicMaterial({
-            map: doorTex || undefined,
-            color: doorTex ? 0xffffff : 0x6B4423,
+    private spawnDoorEntity3D(def: EntitySpawnDef, floorY: number) {
+        const geo = new THREE.BoxGeometry(1, 1, 1);
+        const color = new THREE.Color(def.color || '#6B4423');
+        const matParams: THREE.MeshStandardMaterialParameters = {
+            color,
+            transparent: (def.opacity ?? 1) < 1,
+            opacity: def.opacity ?? 1,
+            roughness: 0.7,
+            metalness: 0.1,
             side: THREE.DoubleSide,
-            transparent: true,
-            alphaTest: 0.1
-        });
+        };
 
-        const geo = new THREE.PlaneGeometry(1, 1);
+        // Apply texture if specified
+        if (def.textureSource) {
+            const loader = new THREE.TextureLoader();
+            const tex = loader.load(`/assets/textures/${def.textureSource}`);
+            tex.wrapS = THREE.RepeatWrapping;
+            tex.wrapT = THREE.RepeatWrapping;
+            if (def.uvTilingX || def.uvTilingY) {
+                tex.repeat.set(def.uvTilingX || 1, def.uvTilingY || 1);
+            }
+            if (def.uvOffsetX || def.uvOffsetY) {
+                tex.offset.set(def.uvOffsetX || 0, def.uvOffsetY || 0);
+            }
+            matParams.map = tex;
+            matParams.color = new THREE.Color(0xffffff);
+        }
+
+        const mat = new THREE.MeshStandardMaterial(matParams);
         const mesh = new THREE.Mesh(geo, mat);
 
-        const feetX = portal.position.x;
-        const feetZ = portal.position.z;
-        mesh.position.set(feetX, floorY, feetZ);
+        const sx = def.scale?.x ?? 1.2;
+        const sy = def.scale?.y ?? 2.5;
+        const sz = def.scale?.z ?? 0.35;
+        mesh.scale.set(sx, sy, sz);
+        mesh.position.set(def.position.x, (def.position.y || floorY) + sy / 2, def.position.z);
+
+        if (def.rotation) {
+            mesh.rotation.set(
+                def.rotation.x * Math.PI / 180,
+                def.rotation.y * Math.PI / 180,
+                def.rotation.z * Math.PI / 180
+            );
+        }
+
         this.scene.add(mesh);
 
         const entity = this.world.createEntity();
         this.world.addComponent(entity, 'RoomMember', { roomId: this.currentRoomId! });
         this.world.addComponent(entity, 'Transform', {
-            position: new THREE.Vector3(feetX, floorY, feetZ),
-            rotation: new THREE.Euler(),
-            scale: new THREE.Vector3(1, 1, 1)
+            position: mesh.position.clone(),
+            rotation: mesh.rotation.clone(),
+            scale: mesh.scale.clone()
         });
         this.world.addComponent(entity, 'MeshRenderer', { mesh });
+        this.world.addComponent(entity, 'DoorMarker', {
+            portalId: def.portalId || '',
+            targetRoom: def.targetRoomId || '',
+            targetSpawnId: def.targetSpawnId || '',
+            interactionState: def.interactionState || 'open'
+        });
+    }
 
-        // Compute door dimensions from texture aspect or use defaults
-        let doorW = 4;
-        let doorH = 3;
-        if (doorTex && doorTex.image && doorTex.image.width > 0) {
-            const aspect = doorTex.image.width / doorTex.image.height;
-            doorH = 3.5;
-            doorW = doorH * aspect;
+    /**
+     * Spawn a camera entity in the ECS for multi-camera switching.
+     */
+    private spawnCameraEntity(camDef: CameraDef, index: number) {
+        const entity = this.world.createEntity();
+        this.world.addComponent(entity, 'RoomMember', { roomId: this.currentRoomId! });
+        this.world.addComponent(entity, 'Transform', {
+            position: new THREE.Vector3(camDef.position.x, camDef.position.y, camDef.position.z),
+            rotation: new THREE.Euler(camDef.rotation.x, camDef.rotation.y, camDef.rotation.z, 'XYZ'),
+            scale: new THREE.Vector3(1, 1, 1)
+        });
+        this.world.addComponent(entity, 'CameraMarker', {
+            cameraIndex: index,
+            isDefault: camDef.isDefault,
+            targetLookAt: camDef.targetLookAt || '',
+            fov: camDef.fov || 45
+        });
+    }
+
+    /**
+     * Apply a camera definition to the main camera.
+     */
+    private applyCameraDef(camDef: CameraDef) {
+        this.camera.position.set(camDef.position.x, camDef.position.y, camDef.position.z);
+        
+        if (!camDef.targetLookAt) {
+            this.camera.rotation.set(camDef.rotation.x, camDef.rotation.y, camDef.rotation.z, 'XYZ');
         }
 
-        this.world.addComponent(entity, 'Sprite', {
-            textureKey: 'door',
-            frame: 0,
-            baseWidth: doorW,
-            baseHeight: doorH,
-            discreteScaleOffset: 0
-        });
-
-        this.world.addComponent(entity, 'DoorMarker', {
-            portalId: portal.id || '',
-            targetRoom: portal.targetRoom
-        });
+        this.camera.fov = camDef.fov || 45;
+        this.camera.near = camDef.near || 0.1;
+        this.camera.far = camDef.far || 100;
+        this.camera.updateProjectionMatrix();
     }
 
     /**

@@ -18,7 +18,7 @@ import { RightPanel } from './ui/RightPanel';
 
 import { SceneSerializer } from './export/SceneSerializer';
 
-import type { EditorEntity, EntityType, PrimitiveEntity } from './types/entities';
+import type { EditorEntity, EntityType, PrimitiveEntity, CameraEntity, DoorEntity } from './types/entities';
 import { createDefaultEntity } from './types/entities';
 import type { WorldProject, RoomData } from './types/scene';
 import { createDefaultWorld } from './types/scene';
@@ -27,9 +27,20 @@ export class EditorApp {
   // ── State ──
   private world: WorldProject;
   private activeRoom: RoomData | null = null;
+
+  // ── Flight mode state ──
+  private flightMode = false;
+  private flightCameraEntity: CameraEntity | null = null;
+  private savedCameraPos: THREE.Vector3 = new THREE.Vector3();
+  private savedCameraRot: THREE.Euler = new THREE.Euler();
+  private flightKeys: Record<string, boolean> = {};
+  private flightKeyHandler: ((e: KeyboardEvent) => void) | null = null;
+  private flightKeyUpHandler: ((e: KeyboardEvent) => void) | null = null;
   
   private entityMap: Map<string, EditorEntity> = new Map();
   private meshMap: Map<string, THREE.Object3D> = new Map();
+  // Maps door entity ID → world door segment ID (for position syncing)
+  private doorEntityToWorldDoor: Map<string, string> = new Map();
 
   // ── Viewport ──
   private viewport!: ViewportManager;
@@ -74,6 +85,9 @@ export class EditorApp {
     this.viewport.scene.add(this.roomGroup);
 
     this.worldMapCtrl = new WorldMapController(this.viewport, this.world, (id) => this.selectRoom(id));
+    this.worldMapCtrl.setOnDoorCreated((doorId, midX, midZ, room1Id, room2Id, dirX, dirZ, halfLen) => {
+      this.autoPlaceDoorEntities(doorId, midX, midZ, room1Id, room2Id, dirX, dirZ, halfLen);
+    });
 
     // ── UI Panels ──
     this.menuBar = new MenuBar(
@@ -100,7 +114,9 @@ export class EditorApp {
       (target) => { this.handleEntityChange(target); this.rebuildRoomView(); this.worldMapCtrl.rebuildRooms(); }, // generic refresh
       (entityId) => this.removeEntity(entityId),
       (roomId) => this.removeRoom(roomId),
-      (roomId) => { this.selectRoom(roomId); this.topPanel.setMode('room'); }
+      (roomId) => { this.selectRoom(roomId); this.topPanel.setMode('room'); },
+      (cameraEntity, activate) => this.toggleFlightMode(cameraEntity, activate),
+      () => this.activeRoom ? this.activeRoom.entities : []
     );
 
     // ── Gizmo change ──
@@ -109,6 +125,65 @@ export class EditorApp {
       if (!entityId) return;
       const entity = this.entityMap.get(entityId);
       if (!entity) return;
+
+      // ── Door constraint: project gizmo position directly onto the wall line ──
+      // This avoids all delta/start-pos drift by computing the nearest point on the
+      // infinite wall line from wherever TransformControls moved the object.
+      if (entity.type === 'door') {
+        const door = entity as DoorEntity;
+        const dirX = door.wallDirX;
+        const dirZ = door.wallDirZ;
+        const ancX = door.wallAnchorX;
+        const ancZ = door.wallAnchorZ;
+
+        // Project obj's current world-XZ position onto the wall line:
+        //   t = dot(obj_pos - anchor, wallDir)
+        //   projected = anchor + t * wallDir
+        const t = (obj.position.x - ancX) * dirX + (obj.position.z - ancZ) * dirZ;
+        const newX = parseFloat((ancX + t * dirX).toFixed(3));
+        const newZ = parseFloat((ancZ + t * dirZ).toFixed(3));
+        const wallAngleRad = Math.atan2(-dirZ, dirX);
+
+        // Update entity data
+        entity.transform.position.x = newX;
+        entity.transform.position.y = 0;
+        entity.transform.position.z = newZ;
+        entity.transform.rotation.x = 0;
+        entity.transform.rotation.y = parseFloat(THREE.MathUtils.radToDeg(wallAngleRad).toFixed(2));
+        entity.transform.rotation.z = 0;
+        // Scale is intentionally not touched — stays as set at creation
+
+        // Snap the Three.js object back so the gizmo reflects reality exactly
+        obj.position.set(newX, 0, newZ);
+        obj.rotation.set(0, wallAngleRad, 0);
+
+        // Sync the world-map door segment midpoint
+        const worldDoor = this.world.doors.find(d => d.id === door.worldDoorId);
+        if (worldDoor) {
+          const segHalfLen = Math.sqrt(
+            (worldDoor.points[1].x - worldDoor.points[0].x) ** 2 +
+            (worldDoor.points[1].y - worldDoor.points[0].y) ** 2
+          ) / 2;
+          worldDoor.points[0] = { x: newX - dirX * segHalfLen, y: newZ - dirZ * segHalfLen };
+          worldDoor.points[1] = { x: newX + dirX * segHalfLen, y: newZ + dirZ * segHalfLen };
+          this.worldMapCtrl.rebuildRooms();
+
+          // Sync partner door entities in all other rooms
+          for (const room of this.world.rooms) {
+            if (room === this.activeRoom) continue;
+            for (const e of room.entities) {
+              if (e.type === 'door' && (e as DoorEntity).worldDoorId === door.worldDoorId) {
+                e.transform.position.x = newX;
+                e.transform.position.y = 0;
+                e.transform.position.z = newZ;
+              }
+            }
+          }
+        }
+
+        this.rightPanel.refresh();
+        return;
+      }
 
       entity.transform.position.x = parseFloat(obj.position.x.toFixed(3));
       entity.transform.position.y = parseFloat(obj.position.y.toFixed(3));
@@ -134,9 +209,16 @@ export class EditorApp {
         const mesh = this.meshMap.get(entityId);
         if (mesh && entity) {
           this.gizmo.attach(mesh);
-          const tool = this.leftPanel.getTool();
-          if (tool === 'translate' || tool === 'rotate' || tool === 'scale') {
-            this.gizmo.setMode(tool as GizmoMode);
+          // Doors are always in translate-only world-space mode; no rotate/scale.
+          if (entity.type === 'door') {
+            this.gizmo.transformControls.setMode('translate');
+            this.gizmo.transformControls.setSpace('world');
+          } else {
+            const tool = this.leftPanel.getTool();
+            if (tool === 'translate' || tool === 'rotate' || tool === 'scale') {
+              this.gizmo.setMode(tool as GizmoMode);
+            }
+            this.gizmo.transformControls.setSpace('world');
           }
         } else {
           this.gizmo.detach();
@@ -244,35 +326,6 @@ export class EditorApp {
       this.meshMap.set(entity.id, obj);
       this.roomGroup.add(obj);
     }
-
-    // Synthesize door pseudo-entities so they are visible in Room Mode
-    for (const door of this.world.doors) {
-      if (door.room1Id === this.activeRoom.id || door.room2Id === this.activeRoom.id) {
-        const cx = (door.points[0].x + door.points[1].x) / 2;
-        const cz = (door.points[0].y + door.points[1].y) / 2;
-        
-        let tex = door.texture || 'door';
-        if (tex === 'door_default') tex = 'door'; // fallback for defaults in WorldMapController
-
-        const pseudoEntity: import('./types/entities').SpriteEntity = {
-          id: door.id,
-          type: 'sprite',
-          name: 'Door ' + door.id,
-          textureSource: tex,
-          transform: {
-            position: { x: cx, y: 0, z: cz },
-            rotation: { x: 0, y: 0, z: 0 },
-            scale: { x: 1, y: 1, z: 1 }
-          },
-          visible: true
-        };
-        
-        const obj = this.factory.create(pseudoEntity);
-        // Add to meshMap and roomGroup, but NOT entityMap (so it remains uneditable in Room mode)
-        this.meshMap.set(door.id, obj);
-        this.roomGroup.add(obj);
-      }
-    }
     
     this.rebuildFloorAndWalls();
   }
@@ -336,6 +389,74 @@ export class EditorApp {
     }
     this.wallsMesh = wallGroup as any;
     this.roomGroup.add(wallGroup);
+  }
+
+  /**
+   * Automatically place a DoorEntity in each room that shares a drawn door segment.
+   * Called by WorldMapController after a door line is finalized.
+   * Each room gets its own door entity with targetRoomId pointing to the other room.
+   * The door is rotated to be parallel to the wall, sized to match the drawn segment,
+   * and starts from the floor (position.y = 0).
+   */
+  private autoPlaceDoorEntities(
+    doorId: string, midX: number, midZ: number,
+    room1Id: string, room2Id: string | null,
+    dirX: number, dirZ: number, halfLen: number
+  ) {
+    const roomIds = [room1Id, room2Id].filter(Boolean) as string[];
+    if (roomIds.length === 0) return;
+
+    // Rotation.y that aligns local-X of the box with the wall direction (dirX, 0, dirZ)
+    // Formula: atan2(-dirZ, dirX) satisfies cos(θ)=dirX, sin(θ)=-dirZ in Three.js
+    const wallAngleDeg = parseFloat(
+      THREE.MathUtils.radToDeg(Math.atan2(-dirZ, dirX)).toFixed(2)
+    );
+    // Door width = full segment length; height = standard door; depth = thin
+    const doorWidth = parseFloat((halfLen * 2).toFixed(3));
+
+    for (const roomId of roomIds) {
+      const room = this.world.rooms.find(r => r.id === roomId);
+      if (!room) continue;
+
+      const otherRoomId = roomIds.find(id => id !== roomId) ?? '';
+
+      const entity = createDefaultEntity('door') as DoorEntity;
+      entity.id = `${doorId}_${roomId}`;
+      entity.name = 'Door';
+      entity.targetRoomId = otherRoomId;
+      entity.targetSpawnId = '';
+      // Position at the door midpoint on the floor
+      entity.transform.position = { x: midX, y: 0, z: midZ };
+      // Rotate so the door is parallel to the wall
+      entity.transform.rotation = { x: 0, y: wallAngleDeg, z: 0 };
+      // Scale to match drawn segment: width, standard height, protrudes 0.175 on each side
+      entity.transform.scale = { x: doorWidth, y: 2.5, z: 0.35 };
+      // Store wall mounting metadata
+      entity.wallDirX = dirX;
+      entity.wallDirZ = dirZ;
+      entity.wallAnchorX = midX;  // initial midpoint on the wall line acts as anchor
+      entity.wallAnchorZ = midZ;
+      entity.worldDoorId = doorId;
+
+      // Track which world door this entity belongs to
+      this.doorEntityToWorldDoor.set(entity.id, doorId);
+
+      // Insert directly into the room's entity list
+      room.entities.push(entity);
+      this.entityMap.set(entity.id, entity);
+
+      // If this room is the currently active room, also add the mesh
+      if (room === this.activeRoom) {
+        const obj = this.factory.create(entity);
+        this.meshMap.set(entity.id, obj);
+        this.roomGroup.add(obj);
+      }
+    }
+
+    // Refresh scene if room view is active
+    if (this.currentMode === 'room') {
+      this.rebuildRoomView();
+    }
   }
 
   public addEntity(entity: EditorEntity): THREE.Object3D {
@@ -429,6 +550,16 @@ export class EditorApp {
 
     if (entity.type === 'primitive' && dragData.subType) {
       (entity as PrimitiveEntity).geometryType = dragData.subType as any;
+      // If asset path provided, apply texture
+      if (dragData.assetPath) {
+        (entity as PrimitiveEntity).materialType = 'textured';
+        (entity as PrimitiveEntity).textureSource = dragData.assetPath;
+      }
+    }
+
+    if (entity.type === 'door' && dragData.assetPath) {
+      (entity as DoorEntity).textureSource = dragData.assetPath;
+      (entity as DoorEntity).materialType = 'textured';
     }
 
     const obj = this.addEntity(entity);
@@ -461,6 +592,14 @@ export class EditorApp {
 
       if (entity.type === 'primitive' && dragData.subType) {
         (entity as PrimitiveEntity).geometryType = dragData.subType as any;
+        if (dragData.assetPath) {
+          (entity as PrimitiveEntity).materialType = 'textured';
+          (entity as PrimitiveEntity).textureSource = dragData.assetPath;
+        }
+      }
+      if (entity.type === 'door' && dragData.assetPath) {
+        (entity as DoorEntity).textureSource = dragData.assetPath;
+        (entity as DoorEntity).materialType = 'textured';
       }
       const obj = this.addEntity(entity);
       this.selection.select(obj);
@@ -560,6 +699,136 @@ export class EditorApp {
     const s = this.selection.selectedObject;
     if (s) this.viewport.controls.target.copy(s.position);
     else this.viewport.controls.target.set(0, 0, 0);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // Camera Flight Mode
+  // ═══════════════════════════════════════════════════════════════════
+
+  private toggleFlightMode(cameraEntity: CameraEntity, activate: boolean) {
+    if (activate && !this.flightMode) {
+      this.enterFlightMode(cameraEntity);
+    } else if (this.flightMode) {
+      this.exitFlightMode();
+    }
+  }
+
+  private enterFlightMode(cameraEntity: CameraEntity) {
+    this.flightMode = true;
+    this.flightCameraEntity = cameraEntity;
+
+    // Save editor camera state
+    this.savedCameraPos.copy(this.viewport.camera.position);
+    this.savedCameraRot.copy(this.viewport.camera.rotation);
+
+    // Snap to camera entity transform
+    const t = cameraEntity.transform;
+    this.viewport.camera.position.set(t.position.x, t.position.y, t.position.z);
+    this.viewport.camera.rotation.set(
+      THREE.MathUtils.degToRad(t.rotation.x),
+      THREE.MathUtils.degToRad(t.rotation.y),
+      THREE.MathUtils.degToRad(t.rotation.z)
+    );
+    this.viewport.camera.fov = cameraEntity.fov;
+    this.viewport.camera.updateProjectionMatrix();
+
+    // Disable orbit controls
+    this.viewport.controls.enabled = false;
+    this.gizmo.detach();
+
+    // Bind WASD + mouse look
+    this.flightKeys = {};
+    this.flightKeyHandler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { this.exitFlightMode(); return; }
+      this.flightKeys[e.key.toLowerCase()] = true;
+    };
+    this.flightKeyUpHandler = (e: KeyboardEvent) => {
+      this.flightKeys[e.key.toLowerCase()] = false;
+    };
+    document.addEventListener('keydown', this.flightKeyHandler);
+    document.addEventListener('keyup', this.flightKeyUpHandler);
+
+    // Mouse look
+    const canvas = this.viewport.renderer.domElement;
+    canvas.requestPointerLock();
+
+    const mouseMoveHandler = (e: MouseEvent) => {
+      if (!this.flightMode) return;
+      const sensitivity = 0.002;
+      this.viewport.camera.rotation.y -= e.movementX * sensitivity;
+      this.viewport.camera.rotation.x -= e.movementY * sensitivity;
+      this.viewport.camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.viewport.camera.rotation.x));
+    };
+    document.addEventListener('mousemove', mouseMoveHandler);
+    (this as any)._flightMouseHandler = mouseMoveHandler;
+
+    // Flight update loop
+    const flightUpdate = () => {
+      if (!this.flightMode) return;
+      const speed = 0.15;
+      const forward = new THREE.Vector3();
+      this.viewport.camera.getWorldDirection(forward);
+      const right = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
+
+      if (this.flightKeys['w']) this.viewport.camera.position.addScaledVector(forward, speed);
+      if (this.flightKeys['s']) this.viewport.camera.position.addScaledVector(forward, -speed);
+      if (this.flightKeys['a']) this.viewport.camera.position.addScaledVector(right, -speed);
+      if (this.flightKeys['d']) this.viewport.camera.position.addScaledVector(right, speed);
+      if (this.flightKeys['e'] || this.flightKeys[' ']) this.viewport.camera.position.y += speed;
+      if (this.flightKeys['q']) this.viewport.camera.position.y -= speed;
+
+      requestAnimationFrame(flightUpdate);
+    };
+    requestAnimationFrame(flightUpdate);
+
+    this.toast('Flight mode ON — WASD to move, Mouse to look, ESC to exit', 'info');
+  }
+
+  private exitFlightMode() {
+    if (!this.flightMode || !this.flightCameraEntity) return;
+
+    // Save camera transform back to entity
+    const cam = this.viewport.camera;
+    const entity = this.flightCameraEntity;
+    entity.transform.position.x = parseFloat(cam.position.x.toFixed(3));
+    entity.transform.position.y = parseFloat(cam.position.y.toFixed(3));
+    entity.transform.position.z = parseFloat(cam.position.z.toFixed(3));
+    entity.transform.rotation.x = parseFloat(THREE.MathUtils.radToDeg(cam.rotation.x).toFixed(2));
+    entity.transform.rotation.y = parseFloat(THREE.MathUtils.radToDeg(cam.rotation.y).toFixed(2));
+    entity.transform.rotation.z = parseFloat(THREE.MathUtils.radToDeg(cam.rotation.z).toFixed(2));
+
+    // Restore editor camera
+    cam.position.copy(this.savedCameraPos);
+    cam.rotation.copy(this.savedCameraRot);
+    cam.fov = 50;
+    cam.updateProjectionMatrix();
+
+    // Re-enable controls
+    this.viewport.controls.enabled = true;
+    this.flightMode = false;
+
+    // Clean up listeners
+    if (this.flightKeyHandler) document.removeEventListener('keydown', this.flightKeyHandler);
+    if (this.flightKeyUpHandler) document.removeEventListener('keyup', this.flightKeyUpHandler);
+    if ((this as any)._flightMouseHandler) document.removeEventListener('mousemove', (this as any)._flightMouseHandler);
+    document.exitPointerLock();
+
+    // Update mesh to match new entity transform
+    const mesh = this.meshMap.get(entity.id);
+    if (mesh) {
+      mesh.position.set(entity.transform.position.x, entity.transform.position.y, entity.transform.position.z);
+      mesh.rotation.set(
+        THREE.MathUtils.degToRad(entity.transform.rotation.x),
+        THREE.MathUtils.degToRad(entity.transform.rotation.y),
+        THREE.MathUtils.degToRad(entity.transform.rotation.z)
+      );
+    }
+
+    // Refresh inspector
+    this.rightPanel.inspectEntity(entity);
+
+    this.flightCameraEntity = null;
+    this.toast('Flight mode OFF — Camera transform saved', 'success');
   }
 
   private toast(message: string, type: 'success' | 'error' | 'info' = 'info') {

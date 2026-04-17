@@ -10,14 +10,16 @@ export type EntityType =
   | 'light'
   | 'sound'
   | 'trigger'
-  | 'spawn';
+  | 'spawn'
+  | 'door';
 
 export type PrimitiveGeometry = 'cube' | 'sphere' | 'plane' | 'cylinder' | 'cone';
 export type LightType = 'point' | 'directional' | 'spot';
 export type BlendMode = 'normal' | 'additive' | 'multiply';
 export type BillboardMode = 'fixed' | 'face_camera' | 'y_axis';
 export type TriggerShape = 'box' | 'sphere';
-export type MaterialType = 'invisible' | 'color' | 'textured';
+export type MaterialType = 'invisible' | 'color' | 'textured' | 'sequence';
+export type DoorInteractionState = 'open' | 'locked' | 'closed';
 
 /** Vector3 data (plain object for serialization) */
 export interface Vec3 {
@@ -79,6 +81,19 @@ export interface PrimitiveEntity extends BaseEntity {
   color: string;
   isCollider: boolean;
   opacity: number;
+  // Static texture params
+  textureSource: string;
+  uvTilingX: number;
+  uvTilingY: number;
+  uvOffsetX: number;
+  uvOffsetY: number;
+  // Sequence (animated texture) params
+  sequenceSource: string;      // sprite sheet image path
+  sequenceJson: string;        // animation descriptor JSON path
+  activeAnimation: string;     // current animation state name
+  playbackSpeed: number;
+  sequenceLoop: boolean;
+  sequenceAutoplay: boolean;
 }
 
 export interface CameraEntity extends BaseEntity {
@@ -124,6 +139,43 @@ export interface SpawnEntity extends BaseEntity {
   type: 'spawn';
   spawnId: string;
   initialFacing: Vec3;
+  // Character parameters
+  characterSpeed: number;
+  characterAsset: string;       // path to main sprite sheet/model
+  actionMapping: {              // maps hardcoded states to sequence names
+    idle: string;
+    walk: string;
+    interact: string;
+    run: string;
+  };
+}
+
+export interface DoorEntity extends BaseEntity {
+  type: 'door';
+  targetRoomId: string;
+  targetSpawnId: string;
+  interactionState: DoorInteractionState;
+  // Inherits all standard primitive material props
+  materialType: MaterialType;
+  color: string;
+  opacity: number;
+  textureSource: string;
+  uvTilingX: number;
+  uvTilingY: number;
+  uvOffsetX: number;
+  uvOffsetY: number;
+  sequenceSource: string;
+  sequenceJson: string;
+  activeAnimation: string;
+  playbackSpeed: number;
+  sequenceLoop: boolean;
+  sequenceAutoplay: boolean;
+  // Wall mounting — set at auto-placement time, kept locked thereafter
+  wallDirX: number;    // unit vector X along wall direction
+  wallDirZ: number;    // unit vector Z along wall direction
+  wallAnchorX: number; // a fixed world-space point on the wall line (used for projection)
+  wallAnchorZ: number;
+  worldDoorId: string; // ID of the parent door segment in WorldProject.doors
 }
 
 /** Discriminated union of all entity types */
@@ -135,7 +187,8 @@ export type EditorEntity =
   | LightEntity
   | SoundEntity
   | TriggerEntity
-  | SpawnEntity;
+  | SpawnEntity
+  | DoorEntity;
 
 // ── Factory Defaults ───────────────────────────────────────────────────
 
@@ -171,7 +224,7 @@ export function createDefaultEntity(type: EntityType, name?: string): EditorEnti
       return { ...base, type: 'animated_sprite', textureSource: '', normalMap: '', depthMap: '', blendMode: 'normal', castShadows: false, receiveShadows: false, billboardMode: 'fixed', framesCount: 1, columns: 1, rows: 1, fps: 12, loop: true, autoplay: true };
 
     case 'primitive':
-      return { ...base, type: 'primitive', geometryType: 'cube', materialType: 'color', color: '#808080', isCollider: true, opacity: 0.5 };
+      return { ...base, type: 'primitive', geometryType: 'cube', materialType: 'color', color: '#808080', isCollider: true, opacity: 0.5, textureSource: '', uvTilingX: 1, uvTilingY: 1, uvOffsetX: 0, uvOffsetY: 0, sequenceSource: '', sequenceJson: '', activeAnimation: '', playbackSpeed: 1, sequenceLoop: true, sequenceAutoplay: true };
 
     case 'camera':
       return { ...base, type: 'camera', fov: 45, orthoSize: 10, near: 0.1, far: 100, isDefault: false, targetLookAt: '' };
@@ -186,6 +239,9 @@ export function createDefaultEntity(type: EntityType, name?: string): EditorEnti
       return { ...base, type: 'trigger', shape: 'box', onEnterEvent: '', onLeaveEvent: '', triggerOnce: false, extents: { x: 2, y: 2, z: 2 } };
 
     case 'spawn':
-      return { ...base, type: 'spawn', spawnId: 'spawn_default', initialFacing: { x: 0, y: 0, z: -1 } };
+      return { ...base, type: 'spawn', spawnId: 'spawn_default', initialFacing: { x: 0, y: 0, z: -1 }, characterSpeed: 3.0, characterAsset: '', actionMapping: { idle: 'idle', walk: 'walk', interact: 'interact', run: 'run' } };
+
+    case 'door':
+      return { ...base, type: 'door', name: name || 'New Door', targetRoomId: '', targetSpawnId: '', interactionState: 'open', materialType: 'color', color: '#6B4423', opacity: 1, textureSource: '', uvTilingX: 1, uvTilingY: 1, uvOffsetX: 0, uvOffsetY: 0, sequenceSource: '', sequenceJson: '', activeAnimation: '', playbackSpeed: 1, sequenceLoop: true, sequenceAutoplay: true, wallDirX: 1, wallDirZ: 0, wallAnchorX: 0, wallAnchorZ: 0, worldDoorId: '', transform: { ...base.transform, scale: { x: 1.2, y: 2.5, z: 0.35 } } };
   }
 }

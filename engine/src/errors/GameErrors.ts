@@ -6,8 +6,8 @@ export class GameError extends Error {
         this.name = new.target.name;
         this.cause = cause;
         Object.setPrototypeOf(this, new.target.prototype);
-        if (Error.captureStackTrace) {
-            Error.captureStackTrace(this, this.constructor);
+        if ((Error as unknown as Record<string, unknown>)['captureStackTrace']) {
+            (Error as unknown as Record<string, (a: unknown, b: unknown) => void>)['captureStackTrace'](this, this.constructor);
         }
     }
 }

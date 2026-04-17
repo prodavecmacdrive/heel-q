@@ -12,10 +12,12 @@ import type {
   SoundEntity,
   TriggerEntity,
   SpawnEntity,
+  DoorEntity,
 } from '../types/entities';
 
 export type InspectorChangeCallback = (target: any) => void;
 export type InspectorDeleteCallback = (id: string) => void;
+export type InspectorFlightCallback = (entity: CameraEntity, activate: boolean) => void;
 
 export class RightPanel {
   private container: HTMLElement;
@@ -25,19 +27,25 @@ export class RightPanel {
   private onDelete: InspectorDeleteCallback;
   private onDeleteRoom: InspectorDeleteCallback;
   private onEnterRoom?: (id: string) => void;
+  private onFlightMode?: InspectorFlightCallback;
+  private allEntities?: () => EditorEntity[];
 
   constructor(
     container: HTMLElement,
     onChange: InspectorChangeCallback,
     onDelete: InspectorDeleteCallback,
     onDeleteRoom: InspectorDeleteCallback,
-    onEnterRoom?: (id: string) => void
+    onEnterRoom?: (id: string) => void,
+    onFlightMode?: InspectorFlightCallback,
+    allEntities?: () => EditorEntity[]
   ) {
     this.container = container;
     this.onChange = onChange;
     this.onDelete = onDelete;
     this.onDeleteRoom = onDeleteRoom;
     this.onEnterRoom = onEnterRoom;
+    this.onFlightMode = onFlightMode;
+    this.allEntities = allEntities;
     this.renderEmpty();
   }
 
@@ -228,6 +236,8 @@ export class RightPanel {
         return this.renderTriggerProps(entity);
       case 'spawn':
         return this.renderSpawnProps(entity);
+      case 'door':
+        return this.renderDoorProps(entity);
     }
   }
 
@@ -257,23 +267,71 @@ export class RightPanel {
   }
 
   private renderPrimitiveProps(e: PrimitiveEntity): string {
-    return this.section('Primitive', `
+    let html = this.section('Primitive', `
       ${this.propSelect('geometryType', 'Geometry', e.geometryType, ['cube', 'sphere', 'plane', 'cylinder', 'cone'])}
-      ${this.propSelect('materialType', 'Material', e.materialType, ['invisible', 'color', 'textured'])}
+      ${this.propSelect('materialType', 'Material', e.materialType, ['invisible', 'color', 'textured', 'sequence'])}
       ${this.propColor('color', 'Color', e.color)}
       ${this.propNumber('opacity', 'Opacity', e.opacity, 2)}
       ${this.propCheckbox('isCollider', 'Is Collider', e.isCollider)}
     `);
+
+    if (e.materialType === 'textured' || e.materialType === 'sequence') {
+      html += this.section('Texture', `
+        ${this.propInput('textureSource', 'Texture Path', e.textureSource || '')}
+        ${this.propNumber('uvTilingX', 'UV Tile X', e.uvTilingX ?? 1, 2)}
+        ${this.propNumber('uvTilingY', 'UV Tile Y', e.uvTilingY ?? 1, 2)}
+        ${this.propNumber('uvOffsetX', 'UV Offset X', e.uvOffsetX ?? 0, 2)}
+        ${this.propNumber('uvOffsetY', 'UV Offset Y', e.uvOffsetY ?? 0, 2)}
+      `);
+    }
+
+    if (e.materialType === 'sequence') {
+      html += this.section('Sequence', `
+        ${this.propInput('sequenceSource', 'Sheet Image', e.sequenceSource || '')}
+        ${this.propInput('sequenceJson', 'Anim JSON', e.sequenceJson || '')}
+        ${this.propInput('activeAnimation', 'Active State', e.activeAnimation || '')}
+        ${this.propNumber('playbackSpeed', 'Speed', e.playbackSpeed ?? 1, 2)}
+        ${this.propCheckbox('sequenceLoop', 'Loop', e.sequenceLoop ?? true)}
+        ${this.propCheckbox('sequenceAutoplay', 'Autoplay', e.sequenceAutoplay ?? true)}
+      `);
+    }
+
+    return html;
   }
 
   private renderCameraProps(e: CameraEntity): string {
+    const hasLookAt = !!e.targetLookAt;
+    const rotationDisabled = hasLookAt ? 'style="opacity:0.4;pointer-events:none"' : '';
+
+    // Build entity ID options for LookAt dropdown
+    let entityOptions = '<option value="">None (use rotation)</option>';
+    if (this.allEntities) {
+      for (const ent of this.allEntities()) {
+        if (ent.id === e.id) continue;
+        const selected = ent.id === e.targetLookAt ? 'selected' : '';
+        entityOptions += `<option value="${ent.id}" ${selected}>${ent.name} (${ent.id})</option>`;
+      }
+    }
+
     return this.section('Camera', `
       ${this.propNumber('fov', 'FOV', e.fov, 1)}
       ${this.propNumber('orthoSize', 'Ortho Size', e.orthoSize, 1)}
       ${this.propNumber('near', 'Near Clip', e.near, 2)}
       ${this.propNumber('far', 'Far Clip', e.far, 1)}
       ${this.propCheckbox('isDefault', 'Default Cam', e.isDefault)}
-      ${this.propInput('targetLookAt', 'LookAt ID', e.targetLookAt)}
+      <div class="prop-row">
+        <span class="prop-label">LookAt Target</span>
+        <select class="prop-select" data-prop="targetLookAt">
+          ${entityOptions}
+        </select>
+      </div>
+      ${hasLookAt ? '<div class="prop-row"><span class="prop-label" style="color:#ffaa00;font-size:10px">Rotation locked — controlled by LookAt target</span></div>' : ''}
+      <button class="inspector-action-btn" id="inspector-fly-camera" style="margin-top:8px;width:100%">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px">
+          <path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/>
+        </svg>
+        Possess / Fly Camera
+      </button>
     `);
   }
 
@@ -312,7 +370,51 @@ export class RightPanel {
     return this.section('Spawn Point', `
       ${this.propInput('spawnId', 'Spawn ID', e.spawnId)}
       ${this.propVec3('initialFacing', 'Facing', e.initialFacing)}
+    `) + this.section('Character', `
+      ${this.propNumber('characterSpeed', 'Move Speed', e.characterSpeed ?? 3.0, 1)}
+      ${this.propInput('characterAsset', 'Asset Source', e.characterAsset || '')}
+      ${this.propInput('actionMapping.idle', 'Idle Anim', e.actionMapping?.idle || 'idle')}
+      ${this.propInput('actionMapping.walk', 'Walk Anim', e.actionMapping?.walk || 'walk')}
+      ${this.propInput('actionMapping.interact', 'Interact Anim', e.actionMapping?.interact || 'interact')}
+      ${this.propInput('actionMapping.run', 'Run Anim', e.actionMapping?.run || 'run')}
     `);
+  }
+
+  private renderDoorProps(e: DoorEntity): string {
+    let html = this.section('Door', `
+      ${this.propInput('targetRoomId', 'Target Room ID', e.targetRoomId || '')}
+      ${this.propInput('targetSpawnId', 'Target Spawn ID', e.targetSpawnId || '')}
+      ${this.propSelect('interactionState', 'State', e.interactionState || 'open', ['open', 'closed', 'locked'])}
+    `);
+
+    html += this.section('Material', `
+      ${this.propSelect('materialType', 'Material', e.materialType || 'color', ['color', 'textured', 'sequence'])}
+      ${this.propColor('color', 'Color', e.color || '#6B4423')}
+      ${this.propNumber('opacity', 'Opacity', e.opacity ?? 1, 2)}
+    `);
+
+    if (e.materialType === 'textured' || e.materialType === 'sequence') {
+      html += this.section('Texture', `
+        ${this.propInput('textureSource', 'Texture Path', e.textureSource || '')}
+        ${this.propNumber('uvTilingX', 'UV Tile X', e.uvTilingX ?? 1, 2)}
+        ${this.propNumber('uvTilingY', 'UV Tile Y', e.uvTilingY ?? 1, 2)}
+        ${this.propNumber('uvOffsetX', 'UV Offset X', e.uvOffsetX ?? 0, 2)}
+        ${this.propNumber('uvOffsetY', 'UV Offset Y', e.uvOffsetY ?? 0, 2)}
+      `);
+    }
+
+    if (e.materialType === 'sequence') {
+      html += this.section('Sequence', `
+        ${this.propInput('sequenceSource', 'Sheet Image', e.sequenceSource || '')}
+        ${this.propInput('sequenceJson', 'Anim JSON', e.sequenceJson || '')}
+        ${this.propInput('activeAnimation', 'Active State', e.activeAnimation || '')}
+        ${this.propNumber('playbackSpeed', 'Speed', e.playbackSpeed ?? 1, 2)}
+        ${this.propCheckbox('sequenceLoop', 'Loop', e.sequenceLoop ?? true)}
+        ${this.propCheckbox('sequenceAutoplay', 'Autoplay', e.sequenceAutoplay ?? true)}
+      `);
+    }
+
+    return html;
   }
 
   // ── HTML Helpers ─────────────────────────────────────────────────
@@ -350,10 +452,11 @@ export class RightPanel {
   }
 
   private propNumber(key: string, label: string, value: number, decimals: number): string {
+    const val = value ?? 0;
     return `
       <div class="prop-row">
         <span class="prop-label">${label}</span>
-        <input class="prop-input" data-prop="${key}" type="number" step="${decimals > 0 ? Math.pow(10, -decimals) : 1}" value="${value.toFixed(decimals)}" />
+        <input class="prop-input" data-prop="${key}" type="number" step="${decimals > 0 ? Math.pow(10, -decimals) : 1}" value="${val.toFixed(decimals)}" />
       </div>`;
   }
 
@@ -391,19 +494,20 @@ export class RightPanel {
       </div>`;
   }
 
-  private propVec3(key: string, label: string, vec: Vec3): string {
+  private propVec3(key: string, label: string, v: Vec3): string {
+    const vec = v || { x: 0, y: 0, z: 0 };
     return `
       <div class="prop-row">
         <span class="prop-label">${label}</span>
         <div class="vec3-group">
           <div class="vec3-input x-axis">
-            <input type="number" step="0.1" data-prop="${key}.x" value="${vec.x.toFixed(2)}" />
+            <input type="number" step="0.1" data-prop="${key}.x" value="${(vec.x ?? 0).toFixed(2)}" />
           </div>
           <div class="vec3-input y-axis">
-            <input type="number" step="0.1" data-prop="${key}.y" value="${vec.y.toFixed(2)}" />
+            <input type="number" step="0.1" data-prop="${key}.y" value="${(vec.y ?? 0).toFixed(2)}" />
           </div>
           <div class="vec3-input z-axis">
-            <input type="number" step="0.1" data-prop="${key}.z" value="${vec.z.toFixed(2)}" />
+            <input type="number" step="0.1" data-prop="${key}.z" value="${(vec.z ?? 0).toFixed(2)}" />
           </div>
         </div>
       </div>`;
@@ -423,6 +527,13 @@ export class RightPanel {
     // Delete button
     document.getElementById('inspector-delete')?.addEventListener('click', () => {
       this.onDelete(entity.id);
+    });
+
+    // Fly camera button
+    document.getElementById('inspector-fly-camera')?.addEventListener('click', () => {
+      if (this.onFlightMode && entity.type === 'camera') {
+        this.onFlightMode(entity as CameraEntity, true);
+      }
     });
 
     // Property inputs
@@ -456,9 +567,20 @@ export class RightPanel {
         return;
       }
 
-      // Other vec3 props like extents, initialFacing
-      if (vecKey in entity) {
-        ((entity as any)[vecKey] as any)[axis] = parseFloat(input.value) || 0;
+      // Nested object props like actionMapping.idle
+      if (vecKey in entity && typeof (entity as any)[vecKey] === 'object') {
+        const parentObj = (entity as any)[vecKey];
+        if (parentObj && axis in parentObj) {
+          parentObj[axis] = input.value;
+          return;
+        }
+        // Also handle vec3 sub-props like extents.x, initialFacing.y
+        const numVal = parseFloat(input.value);
+        if (!isNaN(numVal) && typeof parentObj[axis] === 'number') {
+          parentObj[axis] = numVal;
+          return;
+        }
+        parentObj[axis] = input.value;
         return;
       }
     }
@@ -492,6 +614,7 @@ export class RightPanel {
       sound: '#44cc88',
       trigger: '#cc4488',
       spawn: '#6666ff',
+      door: '#ff6600',
     };
     return colors[type] || '#888';
   }

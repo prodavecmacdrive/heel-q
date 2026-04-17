@@ -338,7 +338,8 @@ export class RoomManager {
             opacity: def.opacity ?? 1,
             roughness: 0.6,
             metalness: 0.1,
-            side: THREE.DoubleSide
+            side: THREE.DoubleSide,
+            shadowSide: THREE.FrontSide,
         });
 
         const texturePathValue = def.sequenceSource || def.textureSource;
@@ -445,7 +446,8 @@ export class RoomManager {
                         cam.bottom = -15;
                     }
                 }
-                light.shadow.bias = -0.005;
+                light.shadow.bias = 0.0;
+                light.shadow.normalBias = 0.15;
             }
         }
 
@@ -455,11 +457,13 @@ export class RoomManager {
     private spawnSpriteEntity(def: EntitySpawnDef, floorY: number, isPlayer: boolean, playerSpeed: number = 3.0) {
         let tex = this.textureManager.getTexture(def.spriteKey) ?? null;
 
-        const mat = new THREE.MeshBasicMaterial({
+        const mat = new THREE.MeshStandardMaterial({
             transparent: true,
             alphaTest: 0.1,
             side: THREE.DoubleSide,
-            map: tex ?? undefined
+            map: tex ?? undefined,
+            roughness: 0.8,
+            metalness: 0.0,
         });
 
         // If texture isn't in the manager yet, load it asynchronously
@@ -572,11 +576,13 @@ export class RoomManager {
     private spawnAtlasSpriteEntity(def: EntitySpawnDef, floorY: number, isPlayer: boolean = false, playerSpeed: number = 3.0) {
         const tex = this.textureManager.getTexture(def.spriteKey) ?? undefined;
 
-        const mat = new THREE.MeshBasicMaterial({
+        const mat = new THREE.MeshStandardMaterial({
             map: tex,
             transparent: true,
             alphaTest: 0.1,
             side: THREE.DoubleSide,
+            roughness: 0.8,
+            metalness: 0.0,
         });
 
         const geo  = new THREE.PlaneGeometry(1, 1);
@@ -709,6 +715,7 @@ export class RoomManager {
             matParams.color = new THREE.Color(0xffffff);
         }
 
+        matParams.shadowSide = THREE.FrontSide;
         const mat = new THREE.MeshStandardMaterial(matParams);
         const mesh = new THREE.Mesh(geo, mat);
 

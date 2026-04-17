@@ -72,7 +72,9 @@
           "wallDirZ": -0.4138029443011839,
           "wallAnchorX": -6.343526896569315,
           "wallAnchorZ": -1.798396865195766,
-          "worldDoorId": "door_1776391749271"
+          "worldDoorId": "door_1776391749271",
+          "castShadow": false,
+          "receiveShadow": false
         },
         {
           "id": "spawn_mo29si3s_3",
@@ -112,7 +114,9 @@
             "run": "run"
           },
           "characterSequenceSource": "\\assets\\sprites\\customer.png",
-          "characterSequenceJson": "\\assets\\sprites\\customer.json"
+          "characterSequenceJson": "\\assets\\sprites\\customer.json",
+          "characterCastShadow": true,
+          "characterReceiveShadow": true
         },
         {
           "id": "camera_mo29skp5_4",
@@ -145,59 +149,19 @@
           "targetLookAt": ""
         },
         {
-          "id": "primitive_mo29vjt5_7",
-          "name": "New primitive",
-          "type": "primitive",
-          "transform": {
-            "position": {
-              "x": -3.357,
-              "y": 0.517,
-              "z": 0.611
-            },
-            "rotation": {
-              "x": 0,
-              "y": 0,
-              "z": 0
-            },
-            "scale": {
-              "x": 3.284,
-              "y": 1.692,
-              "z": -0.098
-            }
-          },
-          "visible": true,
-          "layer": 0,
-          "geometryType": "cube",
-          "materialType": "sequence",
-          "color": "#808080",
-          "isCollider": true,
-          "opacity": 1,
-          "textureSource": "",
-          "uvTilingX": 1,
-          "uvTilingY": 1,
-          "uvOffsetX": 0,
-          "uvOffsetY": 0,
-          "sequenceSource": "\\assets\\sprites\\customer.png",
-          "sequenceJson": "\\assets\\sprites\\customer.json",
-          "activeAnimation": "",
-          "playbackSpeed": 21,
-          "sequenceLoop": true,
-          "sequenceAutoplay": true
-        },
-        {
           "id": "light_mo2ahkqk_1",
           "name": "New light",
           "type": "light",
           "transform": {
             "position": {
-              "x": -3,
-              "y": 2.109,
-              "z": -0.5
+              "x": -1.078,
+              "y": 3.899,
+              "z": 3.95
             },
             "rotation": {
-              "x": 0,
-              "y": 0,
-              "z": 0
+              "x": -75.36,
+              "y": 2.11,
+              "z": -29.6
             },
             "scale": {
               "x": 1,
@@ -209,9 +173,51 @@
           "layer": 0,
           "lightType": "spot",
           "color": "#ffffff",
-          "intensity": 61,
-          "distance": 1,
-          "castShadows": false
+          "intensity": 41,
+          "distance": 21,
+          "castShadows": true
+        },
+        {
+          "id": "primitive_mo2xfiig_1",
+          "name": "New primitive",
+          "type": "primitive",
+          "transform": {
+            "position": {
+              "x": -3,
+              "y": 1.875,
+              "z": 2.603
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 3.553,
+              "z": 1
+            }
+          },
+          "visible": true,
+          "layer": 0,
+          "geometryType": "cylinder",
+          "materialType": "color",
+          "color": "#808080",
+          "isCollider": true,
+          "opacity": 1,
+          "textureSource": "",
+          "uvTilingX": 1,
+          "uvTilingY": 1,
+          "uvOffsetX": 0,
+          "uvOffsetY": 0,
+          "sequenceSource": "",
+          "sequenceJson": "",
+          "activeAnimation": "",
+          "playbackSpeed": 1,
+          "sequenceLoop": true,
+          "sequenceAutoplay": true,
+          "castShadows": true,
+          "receiveShadows": true
         }
       ],
       "spawnPoints": [

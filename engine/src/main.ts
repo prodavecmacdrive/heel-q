@@ -371,7 +371,8 @@ async function bootstrap() {
         engine.start();
 
         if (worldData.rooms.length > 0) {
-            const initialRoomId = worldData.activeRoomId || worldData.rooms[0].id;
+            const spawnRoom = worldData.rooms.find((r: any) => Array.isArray(r.spawnPoints) && r.spawnPoints.length > 0);
+            const initialRoomId = spawnRoom?.id || worldData.activeRoomId || worldData.rooms[0].id;
             console.log(`Starting in room: ${initialRoomId}`);
             await engine.loadRoom(initialRoomId);
         } else {

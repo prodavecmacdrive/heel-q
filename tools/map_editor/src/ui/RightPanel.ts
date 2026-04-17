@@ -273,6 +273,8 @@ export class RightPanel {
       ${this.propColor('color', 'Color', e.color)}
       ${this.propNumber('opacity', 'Opacity', e.opacity, 2)}
       ${this.propCheckbox('isCollider', 'Is Collider', e.isCollider)}
+      ${this.propCheckbox('castShadows', 'Cast Shadows', e.castShadows)}
+      ${this.propCheckbox('receiveShadows', 'Recv Shadows', e.receiveShadows)}
     `);
 
     if (e.materialType === 'textured' || e.materialType === 'sequence') {
@@ -378,6 +380,8 @@ export class RightPanel {
       ${this.propNumber('characterSequenceFps', 'Sequence FPS', e.characterSequenceFps ?? 12, 1)}
       ${this.propCheckbox('characterSequenceLoop', 'Loop', e.characterSequenceLoop ?? true)}
       ${this.propCheckbox('characterSequenceAutoplay', 'Autoplay', e.characterSequenceAutoplay ?? true)}
+      ${this.propCheckbox('characterCastShadow', 'Cast Shadow', e.characterCastShadow ?? false)}
+      ${this.propCheckbox('characterReceiveShadow', 'Recv Shadow', e.characterReceiveShadow ?? false)}
       ${this.propInput('actionMapping.idle', 'Idle Anim', e.actionMapping?.idle || 'idle')}
       ${this.propInput('actionMapping.walk', 'Walk Anim', e.actionMapping?.walk || 'walk')}
       ${this.propInput('actionMapping.interact', 'Interact Anim', e.actionMapping?.interact || 'interact')}
@@ -396,6 +400,8 @@ export class RightPanel {
       ${this.propSelect('materialType', 'Material', e.materialType || 'color', ['color', 'textured', 'sequence'])}
       ${this.propColor('color', 'Color', e.color || '#6B4423')}
       ${this.propNumber('opacity', 'Opacity', e.opacity ?? 1, 2)}
+      ${this.propCheckbox('castShadow', 'Cast Shadow', e.castShadow ?? false)}
+      ${this.propCheckbox('receiveShadow', 'Recv Shadow', e.receiveShadow ?? true)}
     `);
 
     if (e.materialType === 'textured' || e.materialType === 'sequence') {

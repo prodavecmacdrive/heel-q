@@ -94,6 +94,8 @@ export interface PrimitiveEntity extends BaseEntity {
   playbackSpeed: number;
   sequenceLoop: boolean;
   sequenceAutoplay: boolean;
+  castShadows: boolean;
+  receiveShadows: boolean;
 }
 
 export interface CameraEntity extends BaseEntity {
@@ -153,6 +155,8 @@ export interface SpawnEntity extends BaseEntity {
     interact: string;
     run: string;
   };
+  characterCastShadow: boolean;
+  characterReceiveShadow: boolean;
 }
 
 export interface DoorEntity extends BaseEntity {
@@ -181,6 +185,8 @@ export interface DoorEntity extends BaseEntity {
   wallAnchorX: number; // a fixed world-space point on the wall line (used for projection)
   wallAnchorZ: number;
   worldDoorId: string; // ID of the parent door segment in WorldProject.doors
+  castShadow: boolean;
+  receiveShadow: boolean;
 }
 
 /** Discriminated union of all entity types */
@@ -229,7 +235,7 @@ export function createDefaultEntity(type: EntityType, name?: string): EditorEnti
       return { ...base, type: 'animated_sprite', textureSource: '', normalMap: '', depthMap: '', blendMode: 'normal', castShadows: false, receiveShadows: false, billboardMode: 'fixed', framesCount: 1, columns: 1, rows: 1, fps: 12, loop: true, autoplay: true };
 
     case 'primitive':
-      return { ...base, type: 'primitive', geometryType: 'cube', materialType: 'color', color: '#808080', isCollider: true, opacity: 0.5, textureSource: '', uvTilingX: 1, uvTilingY: 1, uvOffsetX: 0, uvOffsetY: 0, sequenceSource: '', sequenceJson: '', activeAnimation: '', playbackSpeed: 1, sequenceLoop: true, sequenceAutoplay: true };
+      return { ...base, type: 'primitive', geometryType: 'cube', materialType: 'color', color: '#808080', isCollider: true, opacity: 0.5, textureSource: '', uvTilingX: 1, uvTilingY: 1, uvOffsetX: 0, uvOffsetY: 0, sequenceSource: '', sequenceJson: '', activeAnimation: '', playbackSpeed: 1, sequenceLoop: true, sequenceAutoplay: true, castShadows: false, receiveShadows: true };
 
     case 'camera':
       return { ...base, type: 'camera', fov: 45, orthoSize: 10, near: 0.1, far: 100, isDefault: false, targetLookAt: '' };
@@ -244,9 +250,9 @@ export function createDefaultEntity(type: EntityType, name?: string): EditorEnti
       return { ...base, type: 'trigger', shape: 'box', onEnterEvent: '', onLeaveEvent: '', triggerOnce: false, extents: { x: 2, y: 2, z: 2 } };
 
     case 'spawn':
-      return { ...base, type: 'spawn', spawnId: 'spawn_default', initialFacing: { x: 0, y: 0, z: -1 }, characterSpeed: 3.0, characterAsset: '', characterSequenceSource: '', characterSequenceJson: '', characterSequenceFps: 12, characterSequenceLoop: true, characterSequenceAutoplay: true, actionMapping: { idle: 'idle', walk: 'walk', interact: 'interact', run: 'run' } };
+      return { ...base, type: 'spawn', spawnId: 'spawn_default', initialFacing: { x: 0, y: 0, z: -1 }, characterSpeed: 3.0, characterAsset: '', characterSequenceSource: '', characterSequenceJson: '', characterSequenceFps: 12, characterSequenceLoop: true, characterSequenceAutoplay: true, actionMapping: { idle: 'idle', walk: 'walk', interact: 'interact', run: 'run' }, characterCastShadow: false, characterReceiveShadow: false };
 
     case 'door':
-      return { ...base, type: 'door', name: name || 'New Door', targetRoomId: '', targetSpawnId: '', interactionState: 'open', materialType: 'color', color: '#6B4423', opacity: 1, textureSource: '', uvTilingX: 1, uvTilingY: 1, uvOffsetX: 0, uvOffsetY: 0, sequenceSource: '', sequenceJson: '', activeAnimation: '', playbackSpeed: 1, sequenceLoop: true, sequenceAutoplay: true, wallDirX: 1, wallDirZ: 0, wallAnchorX: 0, wallAnchorZ: 0, worldDoorId: '', transform: { ...base.transform, scale: { x: 1.2, y: 2.5, z: 0.35 } } };
+      return { ...base, type: 'door', name: name || 'New Door', targetRoomId: '', targetSpawnId: '', interactionState: 'open', materialType: 'color', color: '#6B4423', opacity: 1, textureSource: '', uvTilingX: 1, uvTilingY: 1, uvOffsetX: 0, uvOffsetY: 0, sequenceSource: '', sequenceJson: '', activeAnimation: '', playbackSpeed: 1, sequenceLoop: true, sequenceAutoplay: true, wallDirX: 1, wallDirZ: 0, wallAnchorX: 0, wallAnchorZ: 0, worldDoorId: '', castShadow: false, receiveShadow: true, transform: { ...base.transform, scale: { x: 1.2, y: 2.5, z: 0.35 } } };
   }
 }

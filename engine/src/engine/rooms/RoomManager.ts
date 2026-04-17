@@ -132,12 +132,13 @@ export class RoomManager {
                floorTex.wrapT = THREE.RepeatWrapping;
                floorTex.repeat.set(0.5, 0.5);
             }
-            const floorMat = new THREE.MeshBasicMaterial({ map: floorTex || undefined, color: floorTex ? 0xffffff : 0x1a2030, side: THREE.DoubleSide });
+            const floorMat = new THREE.MeshStandardMaterial({ map: floorTex || undefined, color: floorTex ? 0xffffff : 0x1a2030, side: THREE.DoubleSide, roughness: 0.9, metalness: 0.0 });
             const floorGeo = new THREE.ShapeGeometry(shape);
             const floorMesh = new THREE.Mesh(floorGeo, floorMat);
             // Rotate so that +Y becomes +Z
             floorMesh.rotation.x = Math.PI / 2;
             floorMesh.position.set(0, floorY, 0); // Coordinates are absolute
+            floorMesh.receiveShadow = true;
             this.createBoundaryEntity(floorMesh, true);
             
             // Walls
@@ -147,7 +148,7 @@ export class RoomManager {
                wallTex.wrapS = THREE.RepeatWrapping;
                wallTex.wrapT = THREE.RepeatWrapping;
             }
-            const wallMat = new THREE.MeshBasicMaterial({ map: wallTex || undefined, color: wallTex ? 0xffffff : 0x223344, side: THREE.DoubleSide });
+            const wallMat = new THREE.MeshStandardMaterial({ map: wallTex || undefined, color: wallTex ? 0xffffff : 0x223344, side: THREE.DoubleSide, roughness: 0.9, metalness: 0.0 });
             for (let i = 0; i < outline.length; i++) {
                 const p1 = outline[i];
                 const p2 = outline[(i+1) % outline.length];
@@ -160,6 +161,7 @@ export class RoomManager {
                 const wMesh = new THREE.Mesh(wGeo, wallMat);
                 wMesh.position.set(p1.x + dx/2, floorY + wallHeight/2, p1.y + dy/2);
                 wMesh.rotation.y = angle;
+                wMesh.receiveShadow = true;
                 this.createBoundaryEntity(wMesh, false);
             }
             
@@ -181,22 +183,24 @@ export class RoomManager {
             const fallbackPos = boundaries.floor.position ?? { x: 0, y: 0, z: 0 };
             const floorTexRect = this.textureManager.getTexture(boundaries.floor.texture);
             if (floorTexRect) {
-                const floorMat = new THREE.MeshBasicMaterial({ map: floorTexRect });
+                const floorMat = new THREE.MeshStandardMaterial({ map: floorTexRect, roughness: 0.9, metalness: 0.0 });
                 const floorGeo = new THREE.PlaneGeometry(boundaries.floor.width, boundaries.floor.depth);
                 const floorMesh = new THREE.Mesh(floorGeo, floorMat);
                 floorMesh.rotation.x = -Math.PI / 2;
                 floorMesh.position.set(fallbackPos.x, fallbackPos.y, fallbackPos.z);
+                floorMesh.receiveShadow = true;
                 this.createBoundaryEntity(floorMesh, true);
             }
             // Fallback walls
             for (const wallDef of boundaries.walls) {
                 const wTex = this.textureManager.getTexture(wallDef.texture);
                 if (wTex) {
-                    const wallMat = new THREE.MeshBasicMaterial({ map: wTex });
+                    const wallMat = new THREE.MeshStandardMaterial({ map: wTex, roughness: 0.9, metalness: 0.0 });
                     const wallGeo = new THREE.PlaneGeometry(wallDef.width, wallDef.height);
                     const wallMesh = new THREE.Mesh(wallGeo, wallMat);
                     wallMesh.position.set(wallDef.position.x, wallDef.position.y, wallDef.position.z);
                     wallMesh.rotation.set(wallDef.rotation.x, wallDef.rotation.y, wallDef.rotation.z);
+                    wallMesh.receiveShadow = true;
                     this.createBoundaryEntity(wallMesh, false);
                 }
             }
@@ -265,6 +269,8 @@ export class RoomManager {
                         atlasFrames: roomData.characterSequenceFrames,
                         imageWidth: roomData.characterSequenceImageWidth,
                         imageHeight: roomData.characterSequenceImageHeight,
+                        castShadow: roomData.characterCastShadow ?? false,
+                        receiveShadow: roomData.characterReceiveShadow ?? false,
                     },
                     floorY,
                     true,
@@ -272,7 +278,7 @@ export class RoomManager {
                 );
             } else {
                 this.spawnSpriteEntity(
-                    { spriteKey: playerSpriteKey, width: 2, height: 3, position: spawnPos },
+                    { spriteKey: playerSpriteKey, width: 2, height: 3, position: spawnPos, castShadow: roomData.characterCastShadow ?? false, receiveShadow: roomData.characterReceiveShadow ?? false },
                     floorY, true, playerSpeed
                 );
             }
@@ -369,6 +375,10 @@ export class RoomManager {
         mesh.scale.set(sx, sy, sz);
         mesh.position.set(def.position.x, def.position.y || floorY + sy / 2, def.position.z);
 
+        // Shadow
+        mesh.castShadow = def.castShadow ?? false;
+        mesh.receiveShadow = def.receiveShadow ?? true;
+
         this.scene.add(mesh);
 
         const entity = this.world.createEntity();
@@ -417,6 +427,28 @@ export class RoomManager {
 
         light.position.set(def.position.x, def.position.y, def.position.z);
         (light as any).isRoomLight = true;
+
+        // Shadow configuration
+        if (def.castShadows) {
+            light.castShadow = true;
+            if (light.shadow) {
+                light.shadow.mapSize.width = 1024;
+                light.shadow.mapSize.height = 1024;
+                if ('camera' in light.shadow) {
+                    const cam = light.shadow.camera as THREE.OrthographicCamera | THREE.PerspectiveCamera;
+                    cam.near = 0.5;
+                    cam.far = 50;
+                    if (cam instanceof THREE.OrthographicCamera) {
+                        cam.left = -15;
+                        cam.right = 15;
+                        cam.top = 15;
+                        cam.bottom = -15;
+                    }
+                }
+                light.shadow.bias = -0.005;
+            }
+        }
+
         this.scene.add(light);
     }
 
@@ -456,6 +488,8 @@ export class RoomManager {
         const feetX = def.position.x;
         const feetZ = def.position.z;
         mesh.position.set(feetX, floorY, feetZ);
+        mesh.castShadow = def.castShadow ?? false;
+        mesh.receiveShadow = def.receiveShadow ?? false;
         this.scene.add(mesh);
 
         const entity = this.world.createEntity();
@@ -551,6 +585,8 @@ export class RoomManager {
         const feetX = def.position.x;
         const feetZ = def.position.z;
         mesh.position.set(feetX, floorY, feetZ);
+        mesh.castShadow = def.castShadow ?? false;
+        mesh.receiveShadow = def.receiveShadow ?? false;
         this.scene.add(mesh);
 
         const entity = this.world.createEntity();
@@ -689,6 +725,10 @@ export class RoomManager {
                 def.rotation.z * Math.PI / 180
             );
         }
+
+        // Shadow
+        mesh.castShadow = def.castShadow ?? false;
+        mesh.receiveShadow = def.receiveShadow ?? true;
 
         this.scene.add(mesh);
 

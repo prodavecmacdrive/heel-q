@@ -86,6 +86,8 @@ async function bootstrap() {
                 characterSequenceFps: spawn?.characterSequenceFps ?? 12,
                 characterSequenceLoop: spawn?.characterSequenceLoop ?? true,
                 characterSequenceAutoplay: spawn?.characterSequenceAutoplay ?? true,
+                characterCastShadow: spawn?.characterCastShadow ?? false,
+                characterReceiveShadow: spawn?.characterReceiveShadow ?? false,
             };
         };
 
@@ -152,11 +154,14 @@ async function bootstrap() {
                       result.uvTilingY = e.uvTilingY ?? 1;
                       result.uvOffsetX = e.uvOffsetX ?? 0;
                       result.uvOffsetY = e.uvOffsetY ?? 0;
+                      result.castShadow = e.castShadows ?? false;
+                      result.receiveShadow = e.receiveShadows ?? true;
                   } else if (e.type === 'light') {
                       result.lightType = e.lightType || 'point';
                       result.lightColor = e.color || '#ffffff';
                       result.lightIntensity = e.intensity ?? 1;
                       result.lightDistance = e.distance ?? 10;
+                      result.castShadows = e.castShadows ?? false;
                   } else if (e.type === 'door') {
                       result.targetRoomId = e.targetRoomId || '';
                       result.targetSpawnId = e.targetSpawnId || '';
@@ -174,6 +179,8 @@ async function bootstrap() {
                       result.uvOffsetX = e.uvOffsetX ?? 0;
                       result.uvOffsetY = e.uvOffsetY ?? 0;
                       result.isObstacle = true;
+                      result.castShadow = e.castShadow ?? false;
+                      result.receiveShadow = e.receiveShadow ?? true;
                       // Wire door entity to its portal for PortalSystem collision matching
                       result.portalId = e.worldDoorId || '';
                   } else if (e.type === 'animated_sprite') {
@@ -185,6 +192,8 @@ async function bootstrap() {
                       result.autoplay = e.autoplay ?? true;
                       result.sheetColumns = e.columns ?? 1;
                       result.sheetRows = e.rows ?? 1;
+                      result.castShadow = e.castShadows ?? false;
+                      result.receiveShadow = e.receiveShadows ?? false;
                   } else if (e.type === 'sound') {
                       result.audioSource = e.audioSource || e.src || '';
                       result.volume = e.volume ?? 1;
@@ -192,6 +201,8 @@ async function bootstrap() {
                       result.spatialAudio = e.spatialAudio ?? false;
                   } else {
                       result.spriteKey = e.textureSource || e.spriteKey || '';
+                      result.castShadow = e.castShadows ?? false;
+                      result.receiveShadow = e.receiveShadows ?? false;
                   }
 
                   return result;
@@ -218,6 +229,8 @@ async function bootstrap() {
               characterSequenceFps: spawnChar.characterSequenceFps,
               characterSequenceLoop: spawnChar.characterSequenceLoop,
               characterSequenceAutoplay: spawnChar.characterSequenceAutoplay,
+              characterCastShadow: spawnChar.characterCastShadow,
+              characterReceiveShadow: spawnChar.characterReceiveShadow,
            };
         });
         

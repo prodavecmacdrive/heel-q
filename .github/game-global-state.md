@@ -96,6 +96,8 @@ Single source of truth for all game objects, ECS components, entity types, and t
 | actionMapping.walk | string | `'walk'` | Sequence state name for walk |
 | actionMapping.interact | string | `'interact'` | Sequence state name for interact |
 | actionMapping.run | string | `'run'` | Sequence state name for run |
+| characterCastShadow | boolean | false | Whether player mesh casts shadows |
+| characterReceiveShadow | boolean | false | Whether player mesh receives shadows |
 
 ### State Structure (Engine — `Player` component)
 | Property | Type | Description |
@@ -125,6 +127,7 @@ Single source of truth for all game objects, ECS components, entity types, and t
 - `SpawnEntity.characterSpeed` ↔ `Player.speed` — passed through `extractSpawnCharacter()` → `RoomManager`
 - `syncSpawnPoints()` only extracts `position` and `spawnId` — the character sequence fields are NOT in `spawnPoints[]`; they live on the room-level fields set by `extractSpawnCharacter()`
 - If a sequence player is spawned, `Player` component is added inside `spawnAtlasSpriteEntity()`; forgetting `isPlayer=true` breaks all movement
+- `characterCastShadow` / `characterReceiveShadow` flow through `extractSpawnCharacter()` → `RoomData` → `EntitySpawnDef.castShadow/receiveShadow` → `mesh.castShadow/receiveShadow`
 
 ---
 
@@ -149,6 +152,8 @@ Single source of truth for all game objects, ECS components, entity types, and t
 | playbackSpeed | number | 1 | FPS multiplier |
 | sequenceLoop | boolean | true | Loop sequence |
 | sequenceAutoplay | boolean | true | Autoplay sequence |
+| castShadows | boolean | false | Whether mesh casts shadows |
+| receiveShadows | boolean | true | Whether mesh receives shadows |
 
 ### Access Points
 | Layer | File | Operation | Notes |
@@ -164,6 +169,7 @@ Single source of truth for all game objects, ECS components, entity types, and t
 - `sequenceSource` / `sequenceJson` saved by editor as full Windows paths → normalized by `normalizeAssetPath()` in `main.ts`
 - `materialType === 'sequence'` in editor ↔ presence of `atlasFrames` in engine; no explicit `materialType` field flows to engine
 - Adding a new `materialType` value requires updating: `entities.ts` type union, `RightPanel.ts` select options, `EntityFactory.ts` preview, and `RoomManager.ts` spawn logic
+- Shadow: `castShadows`/`receiveShadows` (editor, plural) → `castShadow`/`receiveShadow` (engine, singular) via `main.ts` mapper
 
 ---
 
@@ -185,6 +191,8 @@ Single source of truth for all game objects, ECS components, entity types, and t
 | sequenceSource | string | `''` | Atlas image path |
 | sequenceJson | string | `''` | Texture Packer JSON path |
 | worldDoorId | string | `''` | Links to `WorldProject.doors[].id` for portal matching |
+| castShadow | boolean | false | Whether door mesh casts shadows |
+| receiveShadow | boolean | true | Whether door mesh receives shadows |
 
 ### Access Points
 | Layer | File | Operation | Notes |
@@ -203,6 +211,7 @@ Single source of truth for all game objects, ECS components, entity types, and t
 - `DoorEntity.worldDoorId` ↔ `DoorMarker.portalId` — the engine matches portal triggers using this value; must not be empty
 - `DoorEntity.interactionState` ↔ `DoorMarker.interactionState` — currently stored but not yet driving open/close behavior at runtime
 - Path normalization applies to `textureSource`, `sequenceSource`, `sequenceJson` — same as PrimitiveEntity
+- Shadow: `castShadow`/`receiveShadow` (same name in editor and engine) mapped through `main.ts`
 
 ---
 

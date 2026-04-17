@@ -56,6 +56,10 @@ export interface EntitySpawnDef {
     audioSource?: string;
     volume?: number;
     spatialAudio?: boolean;
+    /** Shadow settings */
+    castShadows?: boolean;
+    castShadow?: boolean;
+    receiveShadow?: boolean;
 }
 
 export interface CameraDef {
@@ -131,4 +135,7 @@ export interface RoomData {
     characterSequenceFrames?: Array<{ x: number; y: number; w: number; h: number }>;
     characterSequenceImageWidth?: number;
     characterSequenceImageHeight?: number;
+    /** Character shadow settings */
+    characterCastShadow?: boolean;
+    characterReceiveShadow?: boolean;
 }

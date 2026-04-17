@@ -26,6 +26,8 @@ export class PixelRenderer {
             powerPreference: 'high-performance'
         });
         this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+        this.renderer.shadowMap.enabled = true;
+        this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         // Disable auto clearing so we can control it per-pass
         this.renderer.autoClear = false;
 
@@ -34,7 +36,8 @@ export class PixelRenderer {
             minFilter: THREE.NearestFilter,
             magFilter: THREE.NearestFilter,
             format: THREE.RGBAFormat,
-            colorSpace: THREE.SRGBColorSpace
+            colorSpace: THREE.SRGBColorSpace,
+            depthTexture: new THREE.DepthTexture(VIRTUAL_WIDTH, VIRTUAL_HEIGHT)
         });
 
         // --- 2. Setup the Screen Quad (for upscaling) ---

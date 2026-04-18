@@ -15,9 +15,29 @@ This file captures workspace-specific guidance for Copilot and related agents.
 | Application | Location | Port | Purpose |
 |---|---|---|---|
 | Game Engine | `engine/` | 3000 | Three.js game runtime with ECS architecture and pixel-art rendering pipeline |
-| Map Editor | `tools/map_editor/` | 5173 | Three.js level editor for room layout, entity placement, and world management |
+| Map Editor | `tools/map_editor/` | 3001 | Three.js level editor for room layout, entity placement, and world management |
 
 Both apps use **Three.js 0.163.0**, **TypeScript (strict, ES2020)**, and **Vite** as bundler.
+
+---
+
+## Build & Dev
+
+```bash
+# From repo root — run both apps simultaneously
+npm run dev
+
+# Individual apps
+npm run dev:engine    # engine only  → http://localhost:3000
+npm run dev:editor    # editor only  → http://localhost:3001
+
+# Build (inside each app folder)
+npm run build         # tsc && vite build
+```
+
+> **No test runner is configured.** TypeScript type-checking is the only automated check (`tsc`).
+
+> **Live sync**: The editor's Vite plugin intercepts `POST /api/save-world` and writes directly to `engine/src/data/world.json`. Both servers must be running for the full edit→play loop.
 
 ---
 

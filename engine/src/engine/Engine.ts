@@ -50,6 +50,10 @@ export class Engine {
         return this.textureManager;
     }
 
+    public getRoomManager(): RoomManager {
+        return this.roomManager;
+    }
+
     public async loadRoom(roomId: string) {
         const room = this.availableRooms[roomId];
         if (!room) {

@@ -2,6 +2,11 @@
   "name": "heel-quest-workspace",
   "version": "1.0.0",
   "description": "Heel Quest Engine and Editor Toolkit",
+  "workspaces": [
+    "engine",
+    "tools/map_editor",
+    "tools/shared_core"
+  ],
   "scripts": {
     "dev:editor": "cd tools/map_editor && npm run dev",
     "dev:engine": "cd engine && npm run dev",

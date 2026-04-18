@@ -2,6 +2,9 @@ export const VIRTUAL_WIDTH = 480;
 export const VIRTUAL_HEIGHT = 270;
 export const PIXEL_RATIO = 8; // 1 world unit = 8 pixels
 
+/** Multiplier for DepthSortSystem: renderOrder = round(feetZ × DEPTH_SORT_SCALE) */
+export const DEPTH_SORT_SCALE = 1000;
+
 // Discrete scale steps for fake 2.5D perspective scaling
 export const SCALE_STEPS = [1.0, 0.875, 0.75, 0.625, 0.5, 0.375, 0.25, 0.125];
 

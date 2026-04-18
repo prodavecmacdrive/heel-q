@@ -9,6 +9,7 @@ import * as THREE from 'three';
  */
 
 const CELL_SIZE = 0.5; // world units per cell
+export { CELL_SIZE };
 
 interface Cell {
     x: number;       // grid col

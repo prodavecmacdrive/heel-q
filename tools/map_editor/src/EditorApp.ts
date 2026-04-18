@@ -36,6 +36,7 @@ export class EditorApp {
   private flightKeys: Record<string, boolean> = {};
   private flightKeyHandler: ((e: KeyboardEvent) => void) | null = null;
   private flightKeyUpHandler: ((e: KeyboardEvent) => void) | null = null;
+  private _flightMouseHandler: ((e: MouseEvent) => void) | null = null;
   
   private entityMap: Map<string, EditorEntity> = new Map();
   private meshMap: Map<string, THREE.Object3D> = new Map();
@@ -646,10 +647,15 @@ export class EditorApp {
     this.toast('New world created', 'info');
   }
 
-  private saveWorld() {
+  private async saveWorld() {
     this.syncSpawnPoints();
-    this.serializer.saveToStorage(this.world);
-    this.toast('World saved to localStorage', 'success');
+    const result = await this.serializer.saveToStorage(this.world);
+    this.menuBar.updateSaveStatus(result.localSaved, result.engineSynced, result.timestamp, result.error);
+    if (result.engineSynced) {
+      this.toast('World saved', 'success');
+    } else {
+      this.toast('Saved to localStorage only — engine sync failed', 'error');
+    }
   }
 
   private loadWorld() {
@@ -769,7 +775,7 @@ export class EditorApp {
       this.viewport.camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.viewport.camera.rotation.x));
     };
     document.addEventListener('mousemove', mouseMoveHandler);
-    (this as any)._flightMouseHandler = mouseMoveHandler;
+    this._flightMouseHandler = mouseMoveHandler;
 
     // Flight update loop
     const flightUpdate = () => {
@@ -819,7 +825,8 @@ export class EditorApp {
     // Clean up listeners
     if (this.flightKeyHandler) document.removeEventListener('keydown', this.flightKeyHandler);
     if (this.flightKeyUpHandler) document.removeEventListener('keyup', this.flightKeyUpHandler);
-    if ((this as any)._flightMouseHandler) document.removeEventListener('mousemove', (this as any)._flightMouseHandler);
+    if (this._flightMouseHandler) document.removeEventListener('mousemove', this._flightMouseHandler);
+    this._flightMouseHandler = null;
     document.exitPointerLock();
 
     // Update mesh to match new entity transform

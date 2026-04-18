@@ -1,0 +1,9 @@
+{
+  "columns": 2,
+  "rows": 1,
+  "totalFrames": 2,
+  "stateFrames": {
+    "idle": { "start": 0, "end": 0 },
+    "walk": { "start": 1, "end": 1 }
+  }
+}

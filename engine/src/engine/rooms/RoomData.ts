@@ -60,6 +60,16 @@ export interface EntitySpawnDef {
     castShadows?: boolean;
     castShadow?: boolean;
     receiveShadow?: boolean;
+    /** For trigger entities */
+    triggerShape?: string;
+    onEnterEvent?: string;
+    onLeaveEvent?: string;
+    triggerOnce?: boolean;
+    triggerExtents?: { x: number; y: number; z: number };
+    conditionType?: string;
+    conditionValue?: string;
+    targetEntityIds?: string[];
+    payload?: string;
 }
 
 export interface CameraDef {

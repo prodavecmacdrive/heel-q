@@ -1,0 +1,11 @@
+{
+  "name": "@heel-quest/shared-core",
+  "version": "1.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./types/entities": "./src/types/entities.ts",
+    "./types/scene": "./src/types/scene.ts",
+    "./utils/assetPath": "./src/utils/assetPath.ts"
+  }
+}

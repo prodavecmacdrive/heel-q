@@ -7,6 +7,9 @@ import type { ViewportManager } from './ViewportManager';
 import type { WorldProject, RoomData, Vec2 } from '../types/scene';
 import { createDefaultRoom } from '../types/scene';
 
+const SNAP_GRID = 0.5;
+const EDGE_SNAP_THRESHOLD = 2.0;
+
 export class WorldMapController {
   private viewport: ViewportManager;
   private sceneGroup: THREE.Group = new THREE.Group();
@@ -105,7 +108,7 @@ export class WorldMapController {
       if (vHit !== -1) {
         this.draggingVertexIndex = vHit;
         this.dragLastPos = pos;
-        this.draggingRoomId = this.world.activeRoomId;
+        this.draggingRoomId = this.world.activeRoomId ?? null;
         return;
       }
 
@@ -140,7 +143,7 @@ export class WorldMapController {
 
     // ── Wall Snapping Logic ──
     let bestSnap: THREE.Vector3 | null = null;
-    let minSnapDist = 2.0; // Snap threshold
+    let minSnapDist = EDGE_SNAP_THRESHOLD; // Snap threshold
 
     for (const room of this.world.rooms) {
       for (let i = 0; i < room.outline.length; i++) {
@@ -167,8 +170,8 @@ export class WorldMapController {
       pos.copy(bestSnap);
     } else {
       // Fallback: Snap to grid
-      pos.x = Math.round(pos.x * 2) / 2;
-      pos.z = Math.round(pos.z * 2) / 2;
+      pos.x = Math.round(pos.x / SNAP_GRID) * SNAP_GRID;
+      pos.z = Math.round(pos.z / SNAP_GRID) * SNAP_GRID;
     }
 
     if (!this.isDrawing) {

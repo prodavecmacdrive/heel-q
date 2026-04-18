@@ -3,7 +3,7 @@
 Single source of truth for all game objects, ECS components, entity types, and their access/intersection points across the engine, map editor, and future tools.
 
 **Maintained by:** `global-state-synchronizer` skill  
-**Last updated:** 2026-04-17
+**Last updated:** 2026-04-18
 
 ---
 
@@ -32,7 +32,7 @@ Single source of truth for all game objects, ECS components, entity types, and t
 | Engine system | `engine/src/engine/systems/AnimationSystem.ts` | Read/Tick | Queries `['AtlasAnimation','MeshRenderer']`; updates UV offset per frame |
 | Editor type | N/A | — | Not directly represented; derived from parsed sequence JSON |
 | Editor UI | N/A | — | Not surfaced; editor shows raw source/json path fields instead |
-| Engine mapper | `engine/src/main.ts` | Write | `atlasFrames`, `imageWidth`, `imageHeight` populated during preload from JSON |
+| Engine mapper | `engine/src/loaders/WorldLoader.ts` | Write | `atlasFrames`, `imageWidth`, `imageHeight` populated during preload from JSON |
 | Engine data | `engine/src/engine/rooms/RoomData.ts` | Read | `EntitySpawnDef.atlasFrames`, `.imageWidth`, `.imageHeight` |
 
 ### Intersection Points ⚠️
@@ -62,16 +62,17 @@ Single source of truth for all game objects, ECS components, entity types, and t
 | Layer | File | Operation | Notes |
 |---|---|---|---|
 | ECS component | `engine/src/engine/ecs/Component.ts` | Define | Interface + `ComponentRegistry['SpriteAnimation']` |
-| Engine spawner | `engine/src/engine/rooms/RoomManager.ts` | Write | Added in `spawnSpriteEntity()` when `SHEET_META` or `sheetColumns`/`sheetRows` is present |
+| Engine spawner | `engine/src/engine/rooms/RoomManager.ts` | Write | Added in `spawnSpriteEntity()` when `sheetMeta.get(key)` or `sheetColumns`/`sheetRows` is present |
 | Engine system | `engine/src/engine/systems/AnimationSystem.ts` | Read/Tick | Queries `['SpriteAnimation','MeshRenderer']`; updates UV repeat/offset |
 | Engine system | `engine/src/engine/systems/MovementSystem.ts` | Write | Sets `anim.state = player.isMoving ? 'walk' : 'idle'` |
-| Engine mapper | `engine/src/main.ts` | Write | `sheetColumns`, `sheetRows`, `fps` from `animated_sprite` entity |
+| Engine mapper | `engine/src/loaders/WorldLoader.ts` | Write | `sheetColumns`, `sheetRows`, `fps` from `animated_sprite` entity; also loads `.sheet.json` sidecars |
 | Engine data | `engine/src/engine/rooms/RoomData.ts` | Read | `EntitySpawnDef.sheetColumns`, `.sheetRows`, `.fps` |
 | Editor type | N/A | — | Uniform-grid sheets only for legacy characters; no editor field yet |
 
 ### Intersection Points ⚠️
 - `state` is written by `MovementSystem` but only if the entity has a `Player` component — NPC characters need a different state driver
-- `SHEET_META` in `RoomManager.ts` hardcodes column/row layout for known sprite keys; adding a new sheet requires updating that map
+- `SHEET_META` has been moved from a hardcoded constant in `RoomManager.ts` to `.sheet.json` sidecar files loaded by `WorldLoader.loadSheetMeta()`. `RoomManager.setSheetMeta()` receives the loaded map.
+- Adding a new sprite sheet: drop `{key}.sheet.json` in `assets/sprites/` — no source code changes needed
 
 ---
 
@@ -111,10 +112,10 @@ Single source of truth for all game objects, ECS components, entity types, and t
 ### Access Points
 | Layer | File | Operation | Notes |
 |---|---|---|---|
-| Editor type | `tools/map_editor/src/types/entities.ts` | Define | `SpawnEntity` interface + `createDefaultEntity('spawn')` |
+| Editor type | `tools/shared_core/src/types/entities.ts` | Define | `SpawnEntity` interface + `createDefaultEntity('spawn')` |
 | Editor UI | `tools/map_editor/src/ui/RightPanel.ts` | Read/Write | `renderSpawnProps()` — Character section |
 | Editor sync | `tools/map_editor/src/EditorApp.ts` | Read | `syncSpawnPoints()` extracts position into `room.spawnPoints[]` |
-| Engine mapper | `engine/src/main.ts` | Read/Transform | `extractSpawnCharacter()` + preload player atlas JSON |
+| Engine mapper | `engine/src/loaders/WorldLoader.ts` | Read/Transform | `extractSpawnCharacter()` + preload player atlas JSON |
 | Engine data | `engine/src/engine/rooms/RoomData.ts` | Read | `RoomData.characterSequenceSource/Json/Fps/Loop/Autoplay/Frames` |
 | Engine spawner | `engine/src/engine/rooms/RoomManager.ts` | Write | `spawnAtlasSpriteEntity(…, isPlayer=true)` or `spawnSpriteEntity(…, isPlayer=true)` |
 | ECS component | `engine/src/engine/ecs/Component.ts` | Define | `Player` interface + `ComponentRegistry['Player']` |
@@ -123,7 +124,7 @@ Single source of truth for all game objects, ECS components, entity types, and t
 | Engine system | `engine/src/engine/systems/PortalSystem.ts` | Read | Detects portal arrival, triggers room transition |
 
 ### Intersection Points ⚠️
-- `SpawnEntity.characterSequenceJson` (editor) ↔ `RoomData.characterSequenceJson` (engine) — names must match in `main.ts` extractor
+- `SpawnEntity.characterSequenceJson` (editor) ↔ `RoomData.characterSequenceJson` (engine) — names must match in `WorldLoader` extractor
 - `SpawnEntity.characterSpeed` ↔ `Player.speed` — passed through `extractSpawnCharacter()` → `RoomManager`
 - `syncSpawnPoints()` only extracts `position` and `spawnId` — the character sequence fields are NOT in `spawnPoints[]`; they live on the room-level fields set by `extractSpawnCharacter()`
 - If a sequence player is spawned, `Player` component is added inside `spawnAtlasSpriteEntity()`; forgetting `isPlayer=true` breaks all movement
@@ -158,15 +159,15 @@ Single source of truth for all game objects, ECS components, entity types, and t
 ### Access Points
 | Layer | File | Operation | Notes |
 |---|---|---|---|
-| Editor type | `tools/map_editor/src/types/entities.ts` | Define | `PrimitiveEntity` interface |
+| Editor type | `tools/shared_core/src/types/entities.ts` | Define | `PrimitiveEntity` interface |
 | Editor UI | `tools/map_editor/src/ui/RightPanel.ts` | Read/Write | `renderPrimitiveProps()` |
 | Editor viewport | `tools/map_editor/src/viewport/EntityFactory.ts` | Read | `createPrimitive()` — renders preview mesh with texture |
-| Engine mapper | `engine/src/main.ts` | Read/Transform | Maps `e.type === 'primitive'`; normalizes paths |
+| Engine mapper | `engine/src/loaders/WorldLoader.ts` | Read/Transform | Maps `e.type === 'primitive'`; normalizes paths |
 | Engine data | `engine/src/engine/rooms/RoomData.ts` | Read | `EntitySpawnDef` fields |
 | Engine spawner | `engine/src/engine/rooms/RoomManager.ts` | Write | `spawnPrimitiveEntity()` — creates mesh + optional `AtlasAnimation` |
 
 ### Intersection Points ⚠️
-- `sequenceSource` / `sequenceJson` saved by editor as full Windows paths → normalized by `normalizeAssetPath()` in `main.ts`
+- `sequenceSource` / `sequenceJson` saved by editor as full Windows paths → normalized by `normalizeAssetPath()` in `WorldLoader`
 - `materialType === 'sequence'` in editor ↔ presence of `atlasFrames` in engine; no explicit `materialType` field flows to engine
 - Adding a new `materialType` value requires updating: `entities.ts` type union, `RightPanel.ts` select options, `EntityFactory.ts` preview, and `RoomManager.ts` spawn logic
 - Shadow: `castShadows`/`receiveShadows` (editor, plural) → `castShadow`/`receiveShadow` (engine, singular) via `main.ts` mapper
@@ -197,10 +198,10 @@ Single source of truth for all game objects, ECS components, entity types, and t
 ### Access Points
 | Layer | File | Operation | Notes |
 |---|---|---|---|
-| Editor type | `tools/map_editor/src/types/entities.ts` | Define | `DoorEntity` interface |
+| Editor type | `tools/shared_core/src/types/entities.ts` | Define | `DoorEntity` interface |
 | Editor UI | `tools/map_editor/src/ui/RightPanel.ts` | Read/Write | `renderDoorProps()` |
 | Editor viewport | `tools/map_editor/src/viewport/EntityFactory.ts` | Read | `createDoorHelper()` |
-| Engine mapper | `engine/src/main.ts` | Read/Transform | Maps `e.type === 'door'`; normalizes paths; sets `portalId = e.worldDoorId` |
+| Engine mapper | `engine/src/loaders/WorldLoader.ts` | Read/Transform | Maps `e.type === 'door'`; normalizes paths; sets `portalId = e.worldDoorId` |
 | Engine data | `engine/src/engine/rooms/RoomData.ts` | Read | `EntitySpawnDef` fields |
 | Engine spawner | `engine/src/engine/rooms/RoomManager.ts` | Write | `spawnDoorEntity3D()` — mesh + `DoorMarker` + optional `AtlasAnimation` |
 | ECS component | `engine/src/engine/ecs/Component.ts` | Define | `DoorMarker` interface |
@@ -236,5 +237,66 @@ Single source of truth for all game objects, ECS components, entity types, and t
 | Editor | `tools/map_editor/src/types/entities.ts` | Define | `BaseEntity.transform` with `position/rotation/scale` as plain `Vec3` |
 
 ### Intersection Points ⚠️
-- Editor stores transform in **degrees** (for rotation); engine and Three.js use **radians** — `main.ts` converts for camera entities; `RoomManager.ts` converts for door entities
-- Editor `Vec3` ({x,y,z} plain object) ↔ engine `THREE.Vector3` / `THREE.Euler` — the mapper in `main.ts` passes plain objects; `RoomManager` calls `.set()` or `new THREE.Vector3(...)`
+- Editor stores transform in **degrees** (for rotation); engine and Three.js use **radians** — `WorldLoader` converts for camera entities; `RoomManager.ts` converts for door entities
+- Editor `Vec3` ({x,y,z} plain object) ↔ engine `THREE.Vector3` / `THREE.Euler` — the mapper in `WorldLoader` passes plain objects; `RoomManager` calls `.set()` or `new THREE.Vector3(...)`
+
+---
+
+## TriggerEntity
+
+**Category:** Entity Type  
+**Status:** Active
+
+### State Structure
+| Property | Type | Default | Description |
+|---|---|---|---|
+| shape | `'box'\|'sphere'` | `'box'` | Trigger volume shape |
+| extents | Vec3 | `{1,1,1}` | Volume dimensions |
+| onEnterEvent | string | `''` | Event name fired on enter |
+| onLeaveEvent | string | `''` | Event name fired on leave |
+| triggerOnce | boolean | false | Fire only once then disable |
+| conditionType | `TriggerCondition` | `'always'` | When the trigger activates |
+| conditionValue | string | `''` | Condition parameter (flag name, item id, quest id) |
+| targetEntityIds | string[] | `[]` | Entities affected by this trigger |
+| payload | string | `''` | Arbitrary JSON payload for event handler |
+
+### Access Points
+| Layer | File | Operation | Notes |
+|---|---|---|---|
+| Editor type | `tools/shared_core/src/types/entities.ts` | Define | `TriggerEntity` interface + `createDefaultEntity('trigger')` |
+| Editor UI | `tools/map_editor/src/ui/RightPanel.ts` | Read/Write | `renderTriggerProps()` — shape, extents, events, condition, targets, payload |
+| Editor viewport | `tools/map_editor/src/viewport/EntityFactory.ts` | Read | `createTriggerHelper()` — wireframe volume |
+| Engine mapper | `engine/src/loaders/WorldLoader.ts` | Read/Transform | Maps `e.type === 'trigger'` to `EntitySpawnDef` with trigger fields |
+| Engine data | `engine/src/engine/rooms/RoomData.ts` | Read | `EntitySpawnDef.triggerShape`, `.onEnterEvent`, `.onLeaveEvent`, `.triggerOnce`, `.triggerExtents`, `.conditionType`, `.conditionValue`, `.targetEntityIds`, `.payload` |
+
+### Intersection Points ⚠️
+- `TriggerCondition` type lives in `shared_core/src/types/entities.ts` — used by both editor and engine
+- `targetEntityIds` is a comma-separated string in the RightPanel UI, converted to `string[]` by `applyPropChange()`
+- No runtime trigger system exists yet in the engine — the `EntitySpawnDef` fields are defined but `RoomManager` does not spawn trigger volumes at runtime
+
+---
+
+## SpriteSheetMeta
+
+**Category:** Shared Type  
+**Status:** Active
+
+### State Structure
+| Property | Type | Description |
+|---|---|---|
+| columns | number | Sprite sheet column count |
+| rows | number | Sprite sheet row count |
+| totalFrames | number | Total number of animation frames |
+| stateFrames | `Record<string, {start,end}>` | Frame ranges per animation state name |
+
+### Access Points
+| Layer | File | Operation | Notes |
+|---|---|---|---|
+| Type definition | `tools/shared_core/src/types/entities.ts` | Define | `SpriteSheetMeta` interface |
+| Data files | `assets/sprites/*.sheet.json` | Define | JSON sidecar files next to sprite textures |
+| Engine loader | `engine/src/loaders/WorldLoader.ts` | Read | `loadSheetMeta()` fetches sidecars, returns `Map<string, SpriteSheetMeta>` |
+| Engine spawner | `engine/src/engine/rooms/RoomManager.ts` | Read | `setSheetMeta()` receives map; used in `spawnSpriteEntity()` |
+
+### Intersection Points ⚠️
+- Adding a new sheet: create `assets/sprites/{key}.sheet.json` — no source code changes needed
+- `stateFrames` keys must match `SpriteAnimation.state` values ('idle', 'walk', etc.)

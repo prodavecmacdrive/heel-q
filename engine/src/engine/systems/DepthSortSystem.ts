@@ -1,6 +1,7 @@
 import { System } from '../ecs/System';
 import { World } from '../ecs/World';
 import { Transform, MeshRenderer, Sprite } from '../ecs/Component';
+import { DEPTH_SORT_SCALE } from '../constants';
 
 /**
  * DepthSortSystem — strict 2.5D Z-based draw ordering.
@@ -12,7 +13,6 @@ import { Transform, MeshRenderer, Sprite } from '../ecs/Component';
  * Z-buffer fighting with the 3D boundary geometry.
  */
 export class DepthSortSystem extends System {
-    private static readonly DEPTH_SCALE = 1000;
 
     constructor(world: World) {
         super(world);
@@ -27,7 +27,7 @@ export class DepthSortSystem extends System {
 
             // Feet Z → renderOrder.  Higher Z = closer to camera = on top.
             const feetZ = transform.position.z;
-            mr.mesh.renderOrder = Math.round(feetZ * DepthSortSystem.DEPTH_SCALE);
+            mr.mesh.renderOrder = Math.round(feetZ * DEPTH_SORT_SCALE);
         }
     }
 }

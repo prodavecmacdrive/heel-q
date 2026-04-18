@@ -37,6 +37,9 @@ Thumbs.db
 # TypeScript
 *.tsbuildinfo
 
+# Auto-generated world data (written by the editor on every save)
+engine/src/data/world.json
+
 # JetBrains
 .idea/
 

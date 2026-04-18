@@ -5,33 +5,7 @@ import { TextureManager } from '../rendering/TextureManager';
 import { SpriteAnimation, AtlasAnimation, Transform, MeshRenderer, DoorMarker, CameraMarker } from '../ecs/Component';
 import { NavGrid } from '../nav/NavGrid';
 import { Entity } from '../ecs/Entity';
-
-/**
- * Sprite sheet metadata — maps texture key → atlas layout + state frames.
- */
-const SHEET_META: Record<string, {
-    columns: number;
-    rows: number;
-    totalFrames: number;
-    stateFrames: Record<string, { start: number; end: number }>;
-}> = {
-    'elias_sheet': {
-        columns: 4, rows: 2, totalFrames: 8,
-        stateFrames: { idle: { start: 0, end: 3 }, walk: { start: 4, end: 7 } }
-    },
-    'vance_sheet': {
-        columns: 4, rows: 2, totalFrames: 8,
-        stateFrames: { idle: { start: 0, end: 3 }, walk: { start: 4, end: 7 } }
-    },
-    'dog_sheet': {
-        columns: 2, rows: 1, totalFrames: 2,
-        stateFrames: { idle: { start: 0, end: 0 }, walk: { start: 1, end: 1 } }
-    },
-    'scifi_sheet': {
-        columns: 4, rows: 2, totalFrames: 8,
-        stateFrames: { idle: { start: 0, end: 3 }, walk: { start: 4, end: 7 } }
-    }
-};
+import type { SpriteSheetMeta } from '@heel-quest/shared-core';
 
 export class RoomManager {
     public currentRoomId: string | null = null;
@@ -42,6 +16,7 @@ export class RoomManager {
     private textureManager: TextureManager;
     private camera: THREE.PerspectiveCamera;
     private roomAudioElements: HTMLAudioElement[] = [];
+    private sheetMeta: Map<string, SpriteSheetMeta> = new Map();
 
     constructor(
         world: World,
@@ -53,6 +28,11 @@ export class RoomManager {
         this.scene = scene;
         this.textureManager = textureManager;
         this.camera = camera;
+    }
+
+    /** Register externally-loaded sprite sheet metadata */
+    public setSheetMeta(meta: Map<string, SpriteSheetMeta>): void {
+        this.sheetMeta = meta;
     }
 
     async loadRoom(roomData: RoomData) {
@@ -527,7 +507,7 @@ export class RoomManager {
             // Only auto-correct if the image is NOT square (AI often defaults to square for non-sheet assets)
             if (tex.image.width !== tex.image.height) {
                 const imgAspect = tex.image.width / tex.image.height;
-                const meta = SHEET_META[def.spriteKey];
+                const meta = this.sheetMeta.get(def.spriteKey);
                 const frameAspect = meta ? (imgAspect * (meta.rows / meta.columns)) : imgAspect;
                 spriteW = def.height * frameAspect;
                 console.log(`Sprite ${def.spriteKey} -> auto-adjusted width ${spriteW.toFixed(2)}`);
@@ -551,8 +531,8 @@ export class RoomManager {
             });
         }
 
-        // Sprite animation — prefer SHEET_META, fall back to per-entity columns/rows
-        const meta = SHEET_META[def.spriteKey];
+        // Sprite animation — prefer sheet metadata, fall back to per-entity columns/rows
+        const meta = this.sheetMeta.get(def.spriteKey);
         const cols = meta?.columns ?? def.sheetColumns;
         const rows = meta?.rows    ?? def.sheetRows;
         if (cols && rows && tex) {

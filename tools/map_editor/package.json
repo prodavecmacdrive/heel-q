@@ -14,6 +14,7 @@
     "vite": "^5.2.0"
   },
   "dependencies": {
+    "@heel-quest/shared-core": "*",
     "three": "^0.163.0"
   }
 }

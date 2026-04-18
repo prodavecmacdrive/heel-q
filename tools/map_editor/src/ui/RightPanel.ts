@@ -365,6 +365,10 @@ export class RightPanel {
       ${this.propInput('onEnterEvent', 'OnEnter', e.onEnterEvent)}
       ${this.propInput('onLeaveEvent', 'OnLeave', e.onLeaveEvent)}
       ${this.propCheckbox('triggerOnce', 'Once', e.triggerOnce)}
+      ${this.propSelect('conditionType', 'Condition', e.conditionType, ['always', 'item_required', 'flag_set', 'quest_state'])}
+      ${this.propInput('conditionValue', 'Cond. Value', e.conditionValue)}
+      ${this.propInput('targetEntityIds', 'Targets', (e.targetEntityIds || []).join(', '))}
+      ${this.propInput('payload', 'Payload', e.payload)}
     `);
   }
 
@@ -604,6 +608,8 @@ export class RightPanel {
       (entity as any)[key] = el.checked;
     } else if (el.type === 'number') {
       (entity as any)[key] = parseFloat(el.value) || 0;
+    } else if (key === 'targetEntityIds') {
+      (entity as any)[key] = el.value.split(',').map(s => s.trim()).filter(Boolean);
     } else {
       (entity as any)[key] = el.value;
     }

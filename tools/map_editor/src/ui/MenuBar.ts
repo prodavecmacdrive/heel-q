@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════
-   MenuBar — File menu + room info
+   MenuBar — File menu + room info + save status indicator
    ═══════════════════════════════════════════════════════════════════════ */
 
 export type MenuAction = 'new' | 'save' | 'load' | 'export';
@@ -30,6 +30,7 @@ export class MenuBar {
       <div class="menu-separator"></div>
       <button class="menu-btn primary" data-action="export" id="menu-export" style="background:var(--accent-blue);color:#fff;border:none;">⬇ Export JSON</button>
       <div class="menu-spacer"></div>
+      <div class="menu-save-status" id="menu-save-status" style="font-size:11px;color:var(--text-dim);font-family:'JetBrains Mono',monospace;margin-right:12px;white-space:nowrap;"></div>
       <div class="menu-room-info">
         <span id="menu-room-label">Untitled Room</span>
         <span class="menu-room-id" id="menu-room-id">room_untitled</span>
@@ -51,5 +52,26 @@ export class MenuBar {
     const idEl = document.getElementById('menu-room-id');
     if (label) label.textContent = name;
     if (idEl) idEl.textContent = id;
+  }
+
+  /** Update save status indicator */
+  public updateSaveStatus(localSaved: boolean, engineSynced: boolean, timestamp: number, error?: string) {
+    const el = document.getElementById('menu-save-status');
+    if (!el) return;
+
+    const time = new Date(timestamp).toLocaleTimeString();
+    if (error) {
+      el.textContent = `⚠ localStorage only — ${time}`;
+      el.style.color = '#f0883e';
+      el.title = `Engine sync failed: ${error}`;
+    } else if (localSaved && engineSynced) {
+      el.textContent = `✓ Saved — ${time}`;
+      el.style.color = '#3fb950';
+      el.title = 'Saved to localStorage + engine';
+    } else if (localSaved) {
+      el.textContent = `◐ localStorage — ${time}`;
+      el.style.color = '#d29922';
+      el.title = 'Saved to localStorage only';
+    }
   }
 }

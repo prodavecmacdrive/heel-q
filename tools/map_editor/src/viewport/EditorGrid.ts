@@ -4,6 +4,9 @@
 
 import * as THREE from 'three';
 
+const GRID_SIZE = 50;
+const SUB_GRID_STEP = 0.25;
+
 export class EditorGrid {
   public readonly gridGroup: THREE.Group;
 
@@ -11,14 +14,15 @@ export class EditorGrid {
     this.gridGroup = new THREE.Group();
     this.gridGroup.name = '__editor_grid';
 
-    // ── Main grid (50 × 50, 1-unit spacing) ──
-    const mainGrid = new THREE.GridHelper(50, 50, 0x2a3040, 0x1a2030);
+    // ── Main grid (1-unit spacing) ──
+    const mainGrid = new THREE.GridHelper(GRID_SIZE, GRID_SIZE, 0x2a3040, 0x1a2030);
     mainGrid.material.transparent = true;
     (mainGrid.material as THREE.Material).opacity = 0.6;
     this.gridGroup.add(mainGrid);
 
-    // ── Sub-grid (50 × 50, finer 0.25 lines — shown as thin overlay) ──
-    const subGrid = new THREE.GridHelper(50, 200, 0x1a2030, 0x141a24);
+    // ── Sub-grid (finer lines — shown as thin overlay) ──
+    const subDivisions = GRID_SIZE / SUB_GRID_STEP;
+    const subGrid = new THREE.GridHelper(GRID_SIZE, subDivisions, 0x1a2030, 0x141a24);
     subGrid.material.transparent = true;
     (subGrid.material as THREE.Material).opacity = 0.25;
     subGrid.position.y = -0.001; // slightly below main grid
@@ -30,7 +34,7 @@ export class EditorGrid {
     this.gridGroup.add(axes);
 
     // ── Floor reference plane (for raycasting / visual ground) ──
-    const planeGeo = new THREE.PlaneGeometry(50, 50);
+    const planeGeo = new THREE.PlaneGeometry(GRID_SIZE, GRID_SIZE);
     const planeMat = new THREE.MeshStandardMaterial({
       color: 0x0d1117,
       roughness: 0.95,

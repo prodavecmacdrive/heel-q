@@ -1,12 +1,10 @@
 /* ═══════════════════════════════════════════════════════════════════════
-   Scene / Map data structures — re-exports from shared_core
+   shared_core barrel export
    ═══════════════════════════════════════════════════════════════════════ */
 
-export {
-  type Vec2,
-  type DoorDef,
-  type RoomData,
-  type WorldProject,
-  createDefaultWorld,
-  createDefaultRoom,
-} from '@heel-quest/shared-core';
+// Types
+export * from './types/entities';
+export * from './types/scene';
+
+// Utilities
+export { normalizeAssetPath } from './utils/assetPath';

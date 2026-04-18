@@ -3,61 +3,85 @@
   "projectId": "new_world",
   "rooms": [
     {
-      "id": "room_1776391737766",
+      "id": "room_1776477096922",
       "name": "New Room",
       "outline": [
         {
           "x": -5,
-          "y": 13
+          "y": 4
         },
         {
-          "x": -12.5,
-          "y": 1
+          "x": -7,
+          "y": -0.5
         },
         {
-          "x": -1.5,
+          "x": -6,
           "y": -4
         },
         {
-          "x": 10.5,
-          "y": -2
+          "x": -3.5,
+          "y": -6
         },
         {
-          "x": 8.5,
-          "y": 8
+          "x": 0,
+          "y": -6.5
+        },
+        {
+          "x": 1,
+          "y": -6
+        },
+        {
+          "x": 2.5,
+          "y": -5
+        },
+        {
+          "x": 3,
+          "y": -4.5
+        },
+        {
+          "x": 3.5,
+          "y": -2.5
+        },
+        {
+          "x": 5,
+          "y": 2
+        },
+        {
+          "x": 1,
+          "y": 5.5
         }
       ],
       "entities": [
         {
-          "id": "door_1776391749271_room_1776391737766",
+          "id": "door_1776477157485_room_1776477096922",
           "name": "Door",
           "type": "door",
           "transform": {
             "position": {
-              "x": -6.343526896569315,
+              "x": -0.994,
               "y": 0,
-              "z": -1.798396865195766
+              "z": -6.353
             },
             "rotation": {
               "x": 0,
-              "y": 24.44,
+              "y": 7.93,
               "z": 0
             },
             "scale": {
-              "x": 4.461,
+              "x": 1.929,
               "y": 2.5,
               "z": 0.35
             }
           },
           "visible": true,
           "layer": 0,
-          "targetRoomId": "room_1776391745910",
+          "targetRoomId": "room_1776477105780",
           "targetSpawnId": "",
           "interactionState": "open",
-          "materialType": "textured",
-          "color": "#ffffff",
+          "materialType": "color",
+          "color": "#6B4423",
           "opacity": 1,
-          "textureSource": "textures/door.jpg",
+          "textureSource": "",
           "uvTilingX": 1,
           "uvTilingY": 1,
           "uvOffsetX": 0,
@@ -68,27 +92,27 @@
           "playbackSpeed": 1,
           "sequenceLoop": true,
           "sequenceAutoplay": true,
-          "wallDirX": 0.9103664774626048,
-          "wallDirZ": -0.4138029443011839,
-          "wallAnchorX": -6.343526896569315,
-          "wallAnchorZ": -1.798396865195766,
-          "worldDoorId": "door_1776391749271",
+          "wallDirX": 0.990433900758765,
+          "wallDirZ": -0.13798800030356498,
+          "wallAnchorX": -1.5125157359474188,
+          "wallAnchorZ": -6.280547495344174,
+          "worldDoorId": "door_1776477157485",
           "castShadow": false,
-          "receiveShadow": false
+          "receiveShadow": true
         },
         {
-          "id": "spawn_mo29si3s_3",
+          "id": "spawn_mo3on44g_3",
           "name": "New spawn",
           "type": "spawn",
           "transform": {
             "position": {
-              "x": -7.5,
+              "x": -3,
               "y": 0,
-              "z": 1
+              "z": -4.5
             },
             "rotation": {
-              "x": 0,
-              "y": 0,
+              "x": -2.57,
+              "y": 7.93,
               "z": 0
             },
             "scale": {
@@ -107,31 +131,34 @@
           },
           "characterSpeed": 3,
           "characterAsset": "",
+          "characterSequenceSource": "",
+          "characterSequenceJson": "",
+          "characterSequenceFps": 12,
+          "characterSequenceLoop": true,
+          "characterSequenceAutoplay": true,
           "actionMapping": {
             "idle": "idle",
             "walk": "walk",
             "interact": "interact",
             "run": "run"
           },
-          "characterSequenceSource": "\\assets\\sprites\\customer.png",
-          "characterSequenceJson": "\\assets\\sprites\\customer.json",
-          "characterCastShadow": true,
-          "characterReceiveShadow": true
+          "characterCastShadow": false,
+          "characterReceiveShadow": false
         },
         {
-          "id": "camera_mo29skp5_4",
+          "id": "camera_mo3on6df_4",
           "name": "New camera",
           "type": "camera",
           "transform": {
             "position": {
-              "x": -4.85,
-              "y": 0.867,
-              "z": 8.452
+              "x": 1,
+              "y": 2.284,
+              "z": 3.5
             },
             "rotation": {
-              "x": 0,
-              "y": 0,
-              "z": 0
+              "x": -14.93,
+              "y": 10.53,
+              "z": -4.4
             },
             "scale": {
               "x": 1,
@@ -149,19 +176,19 @@
           "targetLookAt": ""
         },
         {
-          "id": "light_mo2ahkqk_1",
+          "id": "light_mo3oq4y9_7",
           "name": "New light",
           "type": "light",
           "transform": {
             "position": {
-              "x": -1.078,
-              "y": 3.899,
-              "z": 3.95
+              "x": 1.336,
+              "y": 1.671,
+              "z": -3.923
             },
             "rotation": {
-              "x": -75.36,
-              "y": 2.11,
-              "z": -29.6
+              "x": 31.88,
+              "y": 30.04,
+              "z": 20.55
             },
             "scale": {
               "x": 1,
@@ -171,123 +198,90 @@
           },
           "visible": true,
           "layer": 0,
-          "lightType": "spot",
+          "lightType": "point",
           "color": "#ffffff",
-          "intensity": 41,
-          "distance": 21,
-          "castShadows": true
-        },
-        {
-          "id": "primitive_mo2xfiig_1",
-          "name": "New primitive",
-          "type": "primitive",
-          "transform": {
-            "position": {
-              "x": -3,
-              "y": 1.875,
-              "z": 2.603
-            },
-            "rotation": {
-              "x": 0,
-              "y": 0,
-              "z": 0
-            },
-            "scale": {
-              "x": 1,
-              "y": 3.553,
-              "z": 1
-            }
-          },
-          "visible": true,
-          "layer": 0,
-          "geometryType": "cylinder",
-          "materialType": "color",
-          "color": "#808080",
-          "isCollider": true,
-          "opacity": 1,
-          "textureSource": "",
-          "uvTilingX": 1,
-          "uvTilingY": 1,
-          "uvOffsetX": 0,
-          "uvOffsetY": 0,
-          "sequenceSource": "",
-          "sequenceJson": "",
-          "activeAnimation": "",
-          "playbackSpeed": 1,
-          "sequenceLoop": true,
-          "sequenceAutoplay": true,
-          "castShadows": true,
-          "receiveShadows": true
+          "intensity": 91,
+          "distance": 50,
+          "castShadows": false
         }
       ],
       "spawnPoints": [
         {
           "id": "spawn_default",
           "position": {
-            "x": -7.5,
+            "x": -3,
             "y": 0,
-            "z": 1
+            "z": -4.5
           }
         }
       ],
       "walkPadding": 1,
       "ambientColor": "#2b5a5b",
-      "heightMap": []
+      "heightMap": [],
+      "cornerRadii": [
+        3.461722986256048,
+        5.60021877805527,
+        4.258567907312573,
+        4.932689319376461,
+        4.431138625665962,
+        2.7545661080664634,
+        3.2217884903239837,
+        2.7478854682420826,
+        2.3789949939804322,
+        3.4543686818672565,
+        3.8964358962004364
+      ]
     },
     {
-      "id": "room_1776391745910",
+      "id": "room_1776477105780",
       "name": "New Room",
       "outline": [
         {
-          "x": -12.422960904622993,
-          "y": 0.9649822293740876
+          "x": -0.012311557788476257,
+          "y": -6.498241206030218
         },
         {
-          "x": -22,
-          "y": -3
+          "x": 4,
+          "y": -13.5
         },
         {
-          "x": -19,
-          "y": -15.5
+          "x": -5.5,
+          "y": -14.5
         },
         {
-          "x": -3.5,
-          "y": -15.5
+          "x": -11,
+          "y": -10
         },
         {
-          "x": -1,
-          "y": -6.5
-        },
-        {
-          "x": -1.715791653678835,
-          "y": -3.9019128846914386
+          "x": -3.5671038117401763,
+          "y": -5.946316950607859
         }
       ],
       "entities": [
         {
-          "id": "door_1776391749271_room_1776391745910",
+          "id": "door_1776477157485_room_1776477105780",
           "name": "Door",
           "type": "door",
           "transform": {
             "position": {
-              "x": -6.343526896569315,
+              "x": -0.994,
               "y": 0,
-              "z": -1.798396865195766
+              "z": -6.353
             },
             "rotation": {
               "x": 0,
-              "y": 24.44,
+              "y": 7.93,
               "z": 0
             },
             "scale": {
-              "x": 4.461,
+              "x": 1.929,
               "y": 2.5,
               "z": 0.35
             }
           },
           "visible": true,
           "layer": 0,
-          "targetRoomId": "room_1776391737766",
+          "targetRoomId": "room_1776477096922",
           "targetSpawnId": "",
           "interactionState": "open",
           "materialType": "color",
@@ -304,26 +298,28 @@
           "playbackSpeed": 1,
           "sequenceLoop": true,
           "sequenceAutoplay": true,
-          "wallDirX": 0.9103664774626048,
-          "wallDirZ": -0.4138029443011839,
-          "wallAnchorX": -6.343526896569315,
-          "wallAnchorZ": -1.798396865195766,
-          "worldDoorId": "door_1776391749271"
+          "wallDirX": 0.990433900758765,
+          "wallDirZ": -0.13798800030356498,
+          "wallAnchorX": -1.5125157359474188,
+          "wallAnchorZ": -6.280547495344174,
+          "worldDoorId": "door_1776477157485",
+          "castShadow": false,
+          "receiveShadow": true
         },
         {
-          "id": "camera_mo29td0p_5",
+          "id": "camera_mo3oopfe_5",
           "name": "New camera",
           "type": "camera",
           "transform": {
             "position": {
-              "x": -9.5,
-              "y": 1.328,
-              "z": -11
+              "x": -3,
+              "y": 2.227,
+              "z": -13.832
             },
             "rotation": {
-              "x": 172.17,
-              "y": -23.5,
-              "z": 155.83
+              "x": -166.2,
+              "y": 0,
+              "z": 0
             },
             "scale": {
               "x": 1,
@@ -339,32 +335,68 @@
           "far": 100,
           "isDefault": false,
           "targetLookAt": ""
+        },
+        {
+          "id": "light_mo3opo1g_6",
+          "name": "New light",
+          "type": "light",
+          "transform": {
+            "position": {
+              "x": -3.5,
+              "y": 0,
+              "z": -9.5
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            }
+          },
+          "visible": true,
+          "layer": 0,
+          "lightType": "point",
+          "color": "#ffffff",
+          "intensity": 91,
+          "distance": 10,
+          "castShadows": false
         }
       ],
       "spawnPoints": [],
       "walkPadding": 1,
       "ambientColor": "#2b5a5b",
-      "heightMap": []
+      "heightMap": [],
+      "cornerRadii": [
+        5.326692246287277,
+        0,
+        0,
+        0,
+        3.4070348143361198
+      ]
     }
   ],
   "doors": [
     {
-      "id": "door_1776391749271",
+      "id": "door_1776477157485",
       "points": [
         {
-          "x": -8.373962335280682,
-          "y": -0.8754716657815083
+          "x": -1.9494465315039418,
+          "y": -6.2198864664484885
         },
         {
-          "x": -4.313091457857947,
-          "y": -2.721322064610024
+          "x": -0.03855346849605823,
+          "y": -6.486113533551511
         }
       ],
-      "room1Id": "room_1776391737766",
-      "room2Id": "room_1776391745910",
+      "room1Id": "room_1776477096922",
+      "room2Id": "room_1776477105780",
       "width": 1,
       "texture": "door_default"
     }
   ],
-  "activeRoomId": "room_1776391737766"
+  "activeRoomId": "room_1776477096922"
 }

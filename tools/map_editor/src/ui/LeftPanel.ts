@@ -2,7 +2,7 @@
    LeftPanel — Toolbar (Select / Move / Rotate / Scale / Paint / Terrain)
    ═══════════════════════════════════════════════════════════════════════ */
 
-export type ToolType = 'select' | 'translate' | 'rotate' | 'scale' | 'paint' | 'terrain' | 'door' | 'room';
+export type ToolType = 'select' | 'translate' | 'rotate' | 'scale' | 'paint' | 'terrain' | 'door' | 'room' | 'round';
 
 export class LeftPanel {
   private container: HTMLElement;
@@ -17,7 +17,7 @@ export class LeftPanel {
   }
 
   public setMode(mode: 'world' | 'room' | 'height') {
-    const worldTools = ['tool-btn-door', 'tool-btn-room', 'tool-btn-translate'];
+    const worldTools = ['tool-btn-door', 'tool-btn-room', 'tool-btn-round', 'tool-btn-translate'];
     const roomTools = ['tool-btn-translate', 'tool-btn-rotate', 'tool-btn-scale'];
 
     worldTools.forEach(id => {
@@ -60,6 +60,17 @@ export class LeftPanel {
         shortcut: 'D',
         icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M3 21V3h14v18M3 21h18M11 12h2"/>
+        </svg>`,
+      },
+      {
+        key: 'round',
+        tooltip: 'Round Corner',
+        shortcut: 'F',
+        icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M4 20 Q4 4 20 4"/>
+          <circle cx="4" cy="20" r="1.5" fill="currentColor"/>
+          <circle cx="20" cy="4" r="1.5" fill="currentColor"/>
+          <circle cx="4" cy="11" r="1" fill="currentColor" opacity="0.5"/>
         </svg>`,
       },
       {
@@ -167,6 +178,7 @@ export class LeftPanel {
         case 'e': this.setTool('rotate'); break;
         case 'r': this.setTool('scale'); break;
         case 'd': this.setTool('door'); break;
+        case 'f': this.setTool('round'); break;
       }
     });
   }

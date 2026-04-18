@@ -41,6 +41,9 @@ export interface RoomData {
   
   /** Height map grid data (flat if not altered) */
   heightMap: number[]; // e.g. a grid inside bounding box
+
+  /** Per-vertex rounding radii for the outline (same length as outline). 0 = sharp corner. */
+  cornerRadii?: number[];
 }
 
 /** Full Map/World data containing all rooms and doors */
@@ -75,5 +78,6 @@ export function createDefaultRoom(id: string): RoomData {
     walkPadding: 1.0,
     ambientColor: '#2b5a5b',
     heightMap: [],
+    cornerRadii: [],
   };
 }

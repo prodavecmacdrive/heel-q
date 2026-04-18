@@ -115,6 +115,43 @@ async function bootstrap() {
             return portals;
         };
 
+        // Expand the room outline using cornerRadii so the engine sees smooth corners.
+        // Uses a quadratic Bezier arc (same algorithm as the editor) for each rounded vertex.
+        const expandOutline = (outline: {x:number;y:number}[], radii?: number[]): {x:number;y:number}[] => {
+            const n = outline.length;
+            if (!radii || radii.every(r => r <= 0) || n < 3) return outline;
+            const result: {x:number;y:number}[] = [];
+            for (let i = 0; i < n; i++) {
+                const r = radii[i] ?? 0;
+                if (r <= 0.001) { result.push(outline[i]); continue; }
+                const prev = outline[(i - 1 + n) % n];
+                const curr = outline[i];
+                const next = outline[(i + 1) % n];
+                const toPrev = { x: prev.x - curr.x, y: prev.y - curr.y };
+                const toNext = { x: next.x - curr.x, y: next.y - curr.y };
+                const lenPrev = Math.sqrt(toPrev.x ** 2 + toPrev.y ** 2);
+                const lenNext = Math.sqrt(toNext.x ** 2 + toNext.y ** 2);
+                if (lenPrev < 0.001 || lenNext < 0.001) { result.push(curr); continue; }
+                const uPrev = { x: toPrev.x / lenPrev, y: toPrev.y / lenPrev };
+                const uNext = { x: toNext.x / lenNext, y: toNext.y / lenNext };
+                const maxR = Math.min(r, lenPrev * 0.45, lenNext * 0.45);
+                if (maxR < 0.01) { result.push(curr); continue; }
+                const t1 = { x: curr.x + uPrev.x * maxR, y: curr.y + uPrev.y * maxR };
+                const t2 = { x: curr.x + uNext.x * maxR, y: curr.y + uNext.y * maxR };
+                const STEPS = 16;
+                result.push(t1);
+                for (let s = 1; s < STEPS; s++) {
+                    const tt = s / STEPS;
+                    result.push({
+                        x: (1-tt)**2*t1.x + 2*(1-tt)*tt*curr.x + tt**2*t2.x,
+                        y: (1-tt)**2*t1.y + 2*(1-tt)*tt*curr.y + tt**2*t2.y,
+                    });
+                }
+                result.push(t2);
+            }
+            return result;
+        };
+
         const mappedRooms = worldData.rooms.map((r: any) => {
            const legacyCam = extractLegacyCamera(r.entities);
            const spawnChar = extractSpawnCharacter(r.entities);
@@ -124,7 +161,7 @@ async function bootstrap() {
               ambientColor: r.ambientColor || '#ffffff',
               walkPadding: 0.5,
               spawnPoints: r.spawnPoints,
-              outline: r.outline,
+              outline: expandOutline(r.outline, r.cornerRadii),
               entities: r.entities
                  .filter((e: any) => e.type === 'sprite' || e.type === 'animated_sprite' || e.type === 'primitive' || e.type === 'light' || e.type === 'door' || e.type === 'sound')
                  .map((e: any) => {

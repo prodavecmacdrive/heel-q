@@ -27,6 +27,12 @@ export class WorldMapController {
   private dragLastPos: THREE.Vector3 | null = null;
   private didDrag = false;
 
+  // Round tool state
+  private roundingVertexIndex: number = -1;
+  private roundingVertexPos: { x: number; y: number } | null = null;
+  private roundingDidDrag = false;
+  private radiusLabel: HTMLElement;
+
   private vertexGroups: THREE.Group = new THREE.Group();
 
   constructor(viewport: ViewportManager, world: WorldProject, onRoomSelect: (roomId: string) => void) {
@@ -39,6 +45,16 @@ export class WorldMapController {
     this.sceneGroup.visible = false;
 
     this.sceneGroup.add(this.vertexGroups);
+
+    // Radius indicator label (DOM overlay)
+    this.radiusLabel = document.createElement('div');
+    this.radiusLabel.style.cssText = [
+      'position:fixed', 'pointer-events:none', 'display:none',
+      'background:rgba(0,0,0,0.75)', 'color:#58a6ff', 'font-size:11px',
+      'font-family:"JetBrains Mono",monospace', 'padding:2px 6px',
+      'border-radius:4px', 'border:1px solid #58a6ff', 'z-index:9999',
+    ].join(';');
+    document.body.appendChild(this.radiusLabel);
   }
 
   public setOnDoorCreated(cb: (doorId: string, midX: number, midZ: number, room1Id: string, room2Id: string | null, dirX: number, dirZ: number, halfLen: number) => void) {
@@ -104,6 +120,19 @@ export class WorldMapController {
       return;
     }
 
+    if (this.currentTool === 'round') {
+      const vHit = this.raycastVertices(e.clientX, e.clientY);
+      if (vHit !== -1) {
+        const room = this.world.rooms.find(r => r.id === this.world.activeRoomId);
+        if (room) {
+          this.roundingVertexIndex = vHit;
+          this.roundingVertexPos = { x: room.outline[vHit].x, y: room.outline[vHit].y };
+          this.roundingDidDrag = false;
+        }
+      }
+      return;
+    }
+
     if (this.currentTool !== 'room' && this.currentTool !== 'door') return;
 
     const pos = this.viewport.screenToFloor(e.clientX, e.clientY);
@@ -163,6 +192,28 @@ export class WorldMapController {
   public handlePointerMove(e: PointerEvent) {
     if (!this.sceneGroup.visible) return;
 
+    // Round tool drag — update corner radius
+    if (this.roundingVertexIndex !== -1 && this.roundingVertexPos) {
+      const pos = this.viewport.screenToFloor(e.clientX, e.clientY);
+      if (pos) {
+        const room = this.world.rooms.find(r => r.id === this.world.activeRoomId);
+        if (room) {
+          if (!room.cornerRadii) room.cornerRadii = new Array(room.outline.length).fill(0);
+          const dx = pos.x - this.roundingVertexPos.x;
+          const dz = pos.z - this.roundingVertexPos.y;
+          const dist = Math.sqrt(dx * dx + dz * dz);
+          room.cornerRadii[this.roundingVertexIndex] = dist;
+          this.roundingDidDrag = true;
+          this.radiusLabel.style.display = 'block';
+          this.radiusLabel.style.left = (e.clientX + 14) + 'px';
+          this.radiusLabel.style.top = (e.clientY - 8) + 'px';
+          this.radiusLabel.textContent = `r = ${dist.toFixed(2)}`;
+          this.rebuildRooms();
+        }
+      }
+      return;
+    }
+
     if (this.draggingRoomId && this.dragLastPos) {
       const pos = this.viewport.screenToFloor(e.clientX, e.clientY);
       if (pos) {
@@ -216,6 +267,22 @@ export class WorldMapController {
   }
 
   public handlePointerUp(e: PointerEvent) {
+     // Round tool: if no drag → reset radius to 0
+     if (this.roundingVertexIndex !== -1) {
+       if (!this.roundingDidDrag) {
+         const room = this.world.rooms.find(r => r.id === this.world.activeRoomId);
+         if (room && room.cornerRadii) {
+           room.cornerRadii[this.roundingVertexIndex] = 0;
+           this.rebuildRooms();
+         }
+       }
+       this.roundingVertexIndex = -1;
+       this.roundingVertexPos = null;
+       this.roundingDidDrag = false;
+       this.radiusLabel.style.display = 'none';
+       return;
+     }
+
      if (this.draggingRoomId) {
         this.draggingRoomId = null;
         this.draggingVertexIndex = -1;
@@ -237,6 +304,7 @@ export class WorldMapController {
     
     // Convert 3D points to 2D outline (x, z -> x, y)
     room.outline = this.points.map(p => ({ x: p.x, y: p.z }));
+    room.cornerRadii = new Array(room.outline.length).fill(0);
     this.world.rooms.push(room);
 
     this.cancelDrawing();
@@ -364,11 +432,14 @@ export class WorldMapController {
     for (const room of this.world.rooms) {
       if (room.outline.length < 3) continue;
 
+      // Expand outline using corner radii for smooth display
+      const displayOutline = WorldMapController.expandOutline(room.outline, room.cornerRadii);
+
       // Draw Filled Shape
       const shape = new THREE.Shape();
-      shape.moveTo(room.outline[0].x, room.outline[0].y);
-      for (let i = 1; i < room.outline.length; i++) {
-        shape.lineTo(room.outline[i].x, room.outline[i].y);
+      shape.moveTo(displayOutline[0].x, displayOutline[0].y);
+      for (let i = 1; i < displayOutline.length; i++) {
+        shape.lineTo(displayOutline[i].x, displayOutline[i].y);
       }
       shape.closePath();
 
@@ -386,20 +457,26 @@ export class WorldMapController {
       mesh.position.y = 0.01; // Slightly above ground
       mesh.userData = { roomId: room.id };
       
-      // Draw Stroke
-      const edges = new THREE.EdgesGeometry(geo);
+      // Draw Stroke – Line directly from display outline avoids triangulation artifacts
+      const strokePts = displayOutline.map(p => new THREE.Vector3(p.x, p.y, -0.002));
+      strokePts.push(new THREE.Vector3(strokePts[0].x, strokePts[0].y, -0.002));
+      const strokeGeo = new THREE.BufferGeometry().setFromPoints(strokePts);
       const lineMat = new THREE.LineBasicMaterial({ color: isSelected ? 0xffffff : 0x888888 });
-      const lineMesh = new THREE.LineSegments(edges, lineMat);
+      const lineMesh = new THREE.Line(strokeGeo, lineMat);
       mesh.add(lineMesh);
 
       this.sceneGroup.add(mesh);
       this.roomMeshes.set(room.id, mesh);
 
-      // Draw Vertices for active room
-      if (isSelected) {
-        const vGeo = new THREE.SphereGeometry(0.25, 8, 8);
-        const vMat = new THREE.MeshBasicMaterial({ color: 0x0088ff });
+      // Draw Vertices for active room (translate or round tool)
+      if (isSelected && (this.currentTool === 'translate' || this.currentTool === 'round')) {
         for (let i = 0; i < room.outline.length; i++) {
+          const hasRadius = (room.cornerRadii?.[i] ?? 0) > 0.01;
+          const vGeo = new THREE.SphereGeometry(0.25, 8, 8);
+          const vColor = this.currentTool === 'round'
+            ? (hasRadius ? 0x00ccff : 0xff8800)
+            : 0x0088ff;
+          const vMat = new THREE.MeshBasicMaterial({ color: vColor });
           const vMesh = new THREE.Mesh(vGeo, vMat);
           vMesh.position.set(room.outline[i].x, 0.05, room.outline[i].y);
           vMesh.userData = { vertexIndex: i };
@@ -421,6 +498,47 @@ export class WorldMapController {
       this.sceneGroup.add(mesh);
       this.roomMeshes.set(door.id, mesh); // So it gets cleared later
     }
+  }
+
+  /**
+   * Expand the polygon outline by rounding corners with quadratic Bezier arcs.
+   * cornerRadii[i] is the rounding radius at outline[i]. 0 = sharp.
+   */
+  public static expandOutline(outline: Vec2[], radii?: number[]): Vec2[] {
+    const n = outline.length;
+    if (!radii || radii.every(r => r <= 0) || n < 3) return outline;
+    const result: Vec2[] = [];
+    for (let i = 0; i < n; i++) {
+      const r = radii[i] ?? 0;
+      if (r <= 0.001) { result.push(outline[i]); continue; }
+      const prev = outline[(i - 1 + n) % n];
+      const curr = outline[i];
+      const next = outline[(i + 1) % n];
+      const toPrev = { x: prev.x - curr.x, y: prev.y - curr.y };
+      const toNext = { x: next.x - curr.x, y: next.y - curr.y };
+      const lenPrev = Math.sqrt(toPrev.x ** 2 + toPrev.y ** 2);
+      const lenNext = Math.sqrt(toNext.x ** 2 + toNext.y ** 2);
+      if (lenPrev < 0.001 || lenNext < 0.001) { result.push(curr); continue; }
+      const uPrev = { x: toPrev.x / lenPrev, y: toPrev.y / lenPrev };
+      const uNext = { x: toNext.x / lenNext, y: toNext.y / lenNext };
+      // Clamp radius so tangent points stay on their edges (45% of edge length)
+      const maxR = Math.min(r, lenPrev * 0.45, lenNext * 0.45);
+      if (maxR < 0.01) { result.push(curr); continue; }
+      const t1 = { x: curr.x + uPrev.x * maxR, y: curr.y + uPrev.y * maxR };
+      const t2 = { x: curr.x + uNext.x * maxR, y: curr.y + uNext.y * maxR };
+      // Quadratic Bezier arc from t1 to t2 with curr as control point
+      const STEPS = 16;
+      result.push(t1);
+      for (let s = 1; s < STEPS; s++) {
+        const tt = s / STEPS;
+        result.push({
+          x: (1 - tt) ** 2 * t1.x + 2 * (1 - tt) * tt * curr.x + tt ** 2 * t2.x,
+          y: (1 - tt) ** 2 * t1.y + 2 * (1 - tt) * tt * curr.y + tt ** 2 * t2.y,
+        });
+      }
+      result.push(t2);
+    }
+    return result;
   }
 
   private raycastVertices(clientX: number, clientY: number): number {

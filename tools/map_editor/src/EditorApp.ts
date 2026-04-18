@@ -342,7 +342,10 @@ export class EditorApp {
     
     if (!this.activeRoom || this.activeRoom.outline.length < 3) return;
     
-    const outline = this.activeRoom.outline;
+    const outline = WorldMapController.expandOutline(
+      this.activeRoom.outline,
+      this.activeRoom.cornerRadii
+    );
     const shape = new THREE.Shape();
     shape.moveTo(outline[0].x, outline[0].y);
     for (let i = 1; i < outline.length; i++) {
@@ -360,35 +363,41 @@ export class EditorApp {
     this.floorMesh.receiveShadow = true;
     this.roomGroup.add(this.floorMesh);
     
-    // Walls
+    // Walls – single BufferGeometry with shared vertices so rounded corners shade smoothly
     const wallHeight = 3;
-    const extrudeSettings = { depth: wallHeight, bevelEnabled: false };
-    const extrudedGeo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-    
-    // Make wall mesh but only show the edges/sides? 
-    // Actually, constructing wall planes manually is better for texturing
-    const wallGroup = new THREE.Group();
     const wallMat = new THREE.MeshStandardMaterial({ color: 0x223344, side: THREE.DoubleSide });
-    
-    for (let i = 0; i < outline.length; i++) {
-        const p1 = outline[i];
-        const p2 = outline[(i+1) % outline.length];
-        
-        const dx = p2.x - p1.x;
-        const dy = p2.y - p1.y;
-        const dist = Math.sqrt(dx*dx + dy*dy);
-        const angle = Math.atan2(-dy, dx);
-        
-        const wGeo = new THREE.PlaneGeometry(dist, wallHeight);
-        const wMesh = new THREE.Mesh(wGeo, wallMat);
-        wMesh.position.set(p1.x + dx/2, wallHeight/2, p1.y + dy/2);
-        wMesh.rotation.y = angle;
-        wMesh.castShadow = true;
-        wMesh.receiveShadow = true;
-        wallGroup.add(wMesh);
+    const N = outline.length;
+    const wPos = new Float32Array(N * 2 * 3);
+    const wUVs = new Float32Array(N * 2 * 2);
+    const wIdx: number[] = [];
+    const wSeg: number[] = [];
+    for (let i = 0; i < N; i++) {
+      const j = (i + 1) % N;
+      const dx = outline[j].x - outline[i].x, dy = outline[j].y - outline[i].y;
+      wSeg.push(Math.sqrt(dx * dx + dy * dy));
     }
-    this.wallsMesh = wallGroup as any;
-    this.roomGroup.add(wallGroup);
+    let wLen = 0;
+    for (let i = 0; i < N; i++) {
+      const p = outline[i], u = wLen / wallHeight;
+      wPos[i*6]   = p.x; wPos[i*6+1] = 0;          wPos[i*6+2] = p.y;
+      wPos[i*6+3] = p.x; wPos[i*6+4] = wallHeight;  wPos[i*6+5] = p.y;
+      wUVs[i*4] = u; wUVs[i*4+1] = 0; wUVs[i*4+2] = u; wUVs[i*4+3] = 1;
+      wLen += wSeg[i];
+    }
+    for (let i = 0; i < N; i++) {
+      const j = (i + 1) % N, bl = i*2, tl = i*2+1, br = j*2, tr = j*2+1;
+      wIdx.push(bl, br, tr,  bl, tr, tl);
+    }
+    const wallGeo = new THREE.BufferGeometry();
+    wallGeo.setAttribute('position', new THREE.BufferAttribute(wPos, 3));
+    wallGeo.setAttribute('uv',       new THREE.BufferAttribute(wUVs, 2));
+    wallGeo.setIndex(wIdx);
+    wallGeo.computeVertexNormals();
+    const wallMesh = new THREE.Mesh(wallGeo, wallMat);
+    wallMesh.castShadow = true;
+    wallMesh.receiveShadow = true;
+    this.wallsMesh = wallMesh;
+    this.roomGroup.add(wallMesh);
   }
 
   /**

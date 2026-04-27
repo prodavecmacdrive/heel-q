@@ -61,6 +61,17 @@ export interface Player {
     pendingPortalId: string | null;
 }
 
+export type FacingDirection = 'down' | 'up' | 'left' | 'right';
+
+export interface CharacterControl {
+    facing: FacingDirection;
+    action: string;
+    requestedAction: string | null;
+    currentGroup: string;
+    frameGroups: Record<string, number[]>;
+    sourceFrames: Array<{ x: number; y: number; w: number; h: number; filename?: string }>;
+}
+
 // ─── Animation component ──────────────────────────────────────────
 
 export interface SpriteAnimation {
@@ -127,6 +138,7 @@ export interface ComponentRegistry {
     'Interactable': Interactable;
     'RoomMember': RoomMember;
     'Player': Player;
+    'CharacterControl': CharacterControl;
     'SpriteAnimation': SpriteAnimation;
     'FloorMarker': FloorMarker;
     'Obstacle': Obstacle;

@@ -2,7 +2,7 @@
    LeftPanel — Toolbar (Select / Move / Rotate / Scale / Paint / Terrain)
    ═══════════════════════════════════════════════════════════════════════ */
 
-export type ToolType = 'select' | 'translate' | 'rotate' | 'scale' | 'paint' | 'terrain' | 'door' | 'room' | 'round';
+export type ToolType = 'select' | 'translate' | 'rotate' | 'scale' | 'paint' | 'terrain' | 'door' | 'room' | 'round' | 'height-point' | 'height-line';
 
 export class LeftPanel {
   private container: HTMLElement;
@@ -17,8 +17,9 @@ export class LeftPanel {
   }
 
   public setMode(mode: 'world' | 'room' | 'height') {
-    const worldTools = ['tool-btn-door', 'tool-btn-room', 'tool-btn-round', 'tool-btn-translate'];
-    const roomTools = ['tool-btn-translate', 'tool-btn-rotate', 'tool-btn-scale'];
+    const worldTools   = ['tool-btn-door', 'tool-btn-room', 'tool-btn-round', 'tool-btn-translate'];
+    const roomTools    = ['tool-btn-translate', 'tool-btn-rotate', 'tool-btn-scale'];
+    const heightTools  = ['tool-btn-height-point', 'tool-btn-height-line'];
 
     worldTools.forEach(id => {
       const btn = this.container.querySelector(`#${id}`) as HTMLElement;
@@ -27,13 +28,24 @@ export class LeftPanel {
 
     roomTools.forEach(id => {
       const btn = this.container.querySelector(`#${id}`) as HTMLElement;
-      if (btn) {
-        // Only override if not already set by worldTools (translate is shared)
-        if (mode !== 'world') {
-          btn.style.display = (mode === 'room' || mode === 'height') ? 'flex' : 'none';
-        }
+      if (btn && mode !== 'world') {
+        btn.style.display = mode === 'room' ? 'flex' : 'none';
       }
     });
+
+    heightTools.forEach(id => {
+      const btn = this.container.querySelector(`#${id}`) as HTMLElement;
+      if (btn) btn.style.display = mode === 'height' ? 'flex' : 'none';
+    });
+
+    // Auto-select the canonical tool for the new mode
+    if (mode === 'height') {
+      this.setTool('height-point');
+    } else if (mode === 'room') {
+      this.setTool('select');
+    } else if (mode === 'world') {
+      this.setTool('room');
+    }
   }
 
   private render() {
@@ -103,6 +115,31 @@ export class LeftPanel {
       },
     ];
 
+    const heightTools: Array<{ key: ToolType; icon: string; tooltip: string; shortcut: string }> = [
+      {
+        key: 'height-point',
+        tooltip: 'Elevation Node — click to place a hill/pit control point',
+        shortcut: 'H',
+        icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="10" r="3"/>
+          <path d="M12 2v2M12 18v4M4 10H2M22 10h-2"/>
+          <path d="M6 6l1.5 1.5M18 6l-1.5 1.5M6 14l1.5-1.5"/>
+          <ellipse cx="12" cy="10" rx="6" ry="2" opacity="0.35"/>
+        </svg>`,
+      },
+      {
+        key: 'height-line',
+        tooltip: 'Elevation Ridge/Trench — click waypoints, Enter to finalize',
+        shortcut: 'L',
+        icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M3 18 Q8 6 12 10 Q16 14 21 4"/>
+          <circle cx="3" cy="18" r="1.5" fill="currentColor"/>
+          <circle cx="12" cy="10" r="1.5" fill="currentColor"/>
+          <circle cx="21" cy="4" r="1.5" fill="currentColor"/>
+        </svg>`,
+      },
+    ];
+
     const stubTools: Array<{ key: ToolType; icon: string; tooltip: string; shortcut: string }> = [
       {
         key: 'paint',
@@ -112,15 +149,6 @@ export class LeftPanel {
           <path d="M19 3H5a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2z"/>
           <path d="M12 9v12"/>
           <circle cx="12" cy="21" r="1"/>
-        </svg>`,
-      },
-      {
-        key: 'terrain',
-        tooltip: 'Terrain (Coming Soon)',
-        shortcut: 'T',
-        icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M2 20L8.5 8 13 14 17 10 22 20z"/>
-          <path d="M6 20l4-10"/>
         </svg>`,
       },
     ];
@@ -134,6 +162,13 @@ export class LeftPanel {
         </button>
       `).join('')}
       <div class="tool-separator"></div>
+      ${heightTools.map(t => `
+        <button class="tool-btn ${t.key === this.currentTool ? 'active' : ''}"
+                data-tool="${t.key}" data-tooltip="${t.tooltip}" data-shortcut="${t.shortcut}"
+                style="display:none" id="tool-btn-${t.key}">
+          ${t.icon}
+        </button>
+      `).join('')}
       ${stubTools.map(t => `
         <button class="tool-btn" data-tool="${t.key}" data-tooltip="${t.tooltip}" data-shortcut="${t.shortcut}"
                 style="opacity:0.4" id="tool-btn-${t.key}">
@@ -146,7 +181,7 @@ export class LeftPanel {
     this.container.querySelectorAll('.tool-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
         const tool = (btn as HTMLElement).dataset.tool as ToolType;
-        if (tool === 'paint' || tool === 'terrain') return; // stubs
+        if (tool === 'paint') return; // stub
         this.setTool(tool);
       });
     });
@@ -179,6 +214,8 @@ export class LeftPanel {
         case 'r': this.setTool('scale'); break;
         case 'd': this.setTool('door'); break;
         case 'f': this.setTool('round'); break;
+        case 'h': this.setTool('height-point'); break;
+        case 'l': this.setTool('height-line'); break;
       }
     });
   }

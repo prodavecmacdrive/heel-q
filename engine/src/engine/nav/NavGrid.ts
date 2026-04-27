@@ -83,6 +83,74 @@ export class NavGrid {
         }
     }
 
+    public stampObstacleCircle(wx: number, wz: number, radius: number) {
+        const cellHalf = CELL_SIZE * 0.5;
+        const cMinX = this.worldToCol(wx - radius);
+        const cMaxX = this.worldToCol(wx + radius);
+        const rMinZ = this.worldToRow(wz - radius);
+        const rMaxZ = this.worldToRow(wz + radius);
+        const threshold = radius + cellHalf;
+        const threshSq = threshold * threshold;
+
+        for (let r = rMinZ; r <= rMaxZ; r++) {
+            for (let c = cMinX; c <= cMaxX; c++) {
+                if (r >= 0 && r < this.rows && c >= 0 && c < this.cols) {
+                    const center = this.cellToWorld(c, r, 0);
+                    const dx = center.x - wx;
+                    const dz = center.z - wz;
+                    if (dx * dx + dz * dz <= threshSq) {
+                        this.grid[r][c].blocked = true;
+                    }
+                }
+            }
+        }
+    }
+
+    public stampObstaclePolygon(points: Array<{ x: number; z: number }>) {
+        if (points.length < 3) return;
+
+        let minX = Infinity;
+        let maxX = -Infinity;
+        let minZ = Infinity;
+        let maxZ = -Infinity;
+        for (const point of points) {
+            minX = Math.min(minX, point.x);
+            maxX = Math.max(maxX, point.x);
+            minZ = Math.min(minZ, point.z);
+            maxZ = Math.max(maxZ, point.z);
+        }
+
+        const cMinX = this.worldToCol(minX);
+        const cMaxX = this.worldToCol(maxX);
+        const rMinZ = this.worldToRow(minZ);
+        const rMaxZ = this.worldToRow(maxZ);
+
+        for (let r = rMinZ; r <= rMaxZ; r++) {
+            for (let c = cMinX; c <= cMaxX; c++) {
+                if (r >= 0 && r < this.rows && c >= 0 && c < this.cols) {
+                    const center = this.cellToWorld(c, r, 0);
+                    if (this.pointInPolygon(center.x, center.z, points)) {
+                        this.grid[r][c].blocked = true;
+                    }
+                }
+            }
+        }
+    }
+
+    private pointInPolygon(x: number, z: number, polygon: Array<{ x: number; z: number }>): boolean {
+        let inside = false;
+        for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+            const xi = polygon[i].x;
+            const zi = polygon[i].z;
+            const xj = polygon[j].x;
+            const zj = polygon[j].z;
+            const intersect = ((zi > z) !== (zj > z)) &&
+                (x < (xj - xi) * (z - zi) / (zj - zi) + xi);
+            if (intersect) inside = !inside;
+        }
+        return inside;
+    }
+
     /** Clamp a world position to the navigable bounds */
     public clamp(pos: THREE.Vector3): THREE.Vector3 {
         return new THREE.Vector3(

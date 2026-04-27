@@ -8,3 +8,4 @@ export * from './types/scene';
 
 // Utilities
 export { normalizeAssetPath } from './utils/assetPath';
+export { computeTerrainHeight } from './utils/terrainSampler';

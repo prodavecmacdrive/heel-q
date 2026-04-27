@@ -14,6 +14,7 @@ import { MovementSystem } from './systems/MovementSystem';
 import { PortalSystem } from './systems/PortalSystem';
 import { InputSystem } from './systems/InputSystem';
 import { AnimationSystem } from './systems/AnimationSystem';
+import { CharacterControlSystem } from './systems/CharacterControlSystem';
 import { DepthSortSystem } from './systems/DepthSortSystem';
 import { CameraSystem } from './systems/CameraSystem';
 
@@ -74,7 +75,8 @@ export class Engine {
         );
 
         // 2. Logic
-        this.world.addSystem(new MovementSystem(this.world));
+        this.world.addSystem(new MovementSystem(this.world, this.roomManager, this.camera));
+        this.world.addSystem(new CharacterControlSystem(this.world, this.camera));
         this.world.addSystem(
             new PortalSystem(this.world, this.roomManager, this.availableRooms)
         );

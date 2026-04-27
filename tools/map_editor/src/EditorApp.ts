@@ -9,16 +9,19 @@ import { GizmoController, type GizmoMode } from './viewport/GizmoController';
 import { SelectionManager } from './viewport/SelectionManager';
 import { EntityFactory } from './viewport/EntityFactory';
 import { WorldMapController } from './viewport/WorldMapController';
+import { HeightMapController, type HeightTool } from './viewport/HeightMapController';
 
 import { MenuBar, type MenuAction } from './ui/MenuBar';
 import { TopPanel, type EditorMode } from './ui/TopPanel';
 import { LeftPanel, type ToolType } from './ui/LeftPanel';
 import { BottomPanel, type DragData } from './ui/BottomPanel';
 import { RightPanel } from './ui/RightPanel';
+import { CameraPreviewPanel } from './ui/CameraPreviewPanel';
 
 import { SceneSerializer } from './export/SceneSerializer';
+import { HistoryManager } from './editor/HistoryManager';
 
-import type { EditorEntity, EntityType, PrimitiveEntity, CameraEntity, DoorEntity } from './types/entities';
+import type { EditorEntity, EntityType, PrimitiveEntity, CameraEntity, DoorEntity, SpawnEntity } from './types/entities';
 import { createDefaultEntity } from './types/entities';
 import type { WorldProject, RoomData } from './types/scene';
 import { createDefaultWorld } from './types/scene';
@@ -50,6 +53,7 @@ export class EditorApp {
   private selection!: SelectionManager;
   private factory: EntityFactory = new EntityFactory();
   private worldMapCtrl!: WorldMapController;
+  private heightMapCtrl!: HeightMapController;
 
   // ── UI ──
   private menuBar!: MenuBar;
@@ -57,6 +61,7 @@ export class EditorApp {
   private leftPanel!: LeftPanel;
   private bottomPanel!: BottomPanel;
   private rightPanel!: RightPanel;
+  private cameraPreview!: CameraPreviewPanel;
 
   // ── Serialization ──
   private serializer: SceneSerializer = new SceneSerializer();
@@ -67,6 +72,11 @@ export class EditorApp {
   private wallsMesh: THREE.Mesh | null = null;
 
   private currentMode: EditorMode = 'world';
+
+  // ── History (undo/redo) ──
+  private history = new HistoryManager();
+  /** When true, captureHistory() is a no-op (used for multi-step atomic actions) */
+  private _suppressHistory = false;
 
   constructor() {
     this.world = createDefaultWorld();
@@ -89,6 +99,10 @@ export class EditorApp {
     this.worldMapCtrl.setOnDoorCreated((doorId, midX, midZ, room1Id, room2Id, dirX, dirZ, halfLen) => {
       this.autoPlaceDoorEntities(doorId, midX, midZ, room1Id, room2Id, dirX, dirZ, halfLen);
     });
+    this.worldMapCtrl.setOnHistoryNeeded(() => this.captureHistory());
+
+    this.heightMapCtrl = new HeightMapController(this.viewport);
+    this.heightMapCtrl.onHistoryNeeded = () => this.captureHistory();
 
     // ── UI Panels ──
     this.menuBar = new MenuBar(
@@ -112,13 +126,78 @@ export class EditorApp {
 
     this.rightPanel = new RightPanel(
       document.getElementById('right-panel')!,
-      (target) => { this.handleEntityChange(target); this.rebuildRoomView(); this.worldMapCtrl.rebuildRooms(); }, // generic refresh
+      // onChange: called on commit (blur/enter) — full update + autosave
+      (target) => {
+        if ('type' in target) {
+          this.captureHistory();
+          this.refreshEntityMesh(target as EditorEntity);
+          this.worldMapCtrl.rebuildRooms();
+          this.autoSave();
+        } else {
+          // Room property changed
+          this.worldMapCtrl.rebuildRooms();
+          this.autoSave();
+        }
+      },
       (entityId) => this.removeEntity(entityId),
       (roomId) => this.removeRoom(roomId),
       (roomId) => { this.selectRoom(roomId); this.topPanel.setMode('room'); },
       (cameraEntity, activate) => this.toggleFlightMode(cameraEntity, activate),
       () => this.activeRoom ? this.activeRoom.entities : []
     );
+
+    // Wire height-modifier inspector callbacks
+    this.rightPanel.onModifierChange = (m) => {
+      this.heightMapCtrl.updateModifier(m);
+      this.autoSave();
+    };
+    this.rightPanel.onModifierDelete = (_id) => {
+      this.heightMapCtrl.deleteSelected();
+      this.rightPanel.inspectModifier(null);
+    };
+
+    // Wire outliner callbacks
+    this.rightPanel.onEntitySelect = (entityId) => {
+      const mesh = this.meshMap.get(entityId);
+      if (mesh) this.selection.select(mesh);
+    };
+    this.rightPanel.onEntityHover = (entityId) => {
+      this.selection.setHover(entityId);
+    };
+    // World-map outliner: clicking a room selects it
+    this.rightPanel.onWorldRoomSelect = (roomId) => {
+      this.selectRoom(roomId);
+    };
+    // Height-map outliner: clicking a modifier selects it in HeightMapController
+    this.rightPanel.onHeightModifierSelect = (modifierId) => {
+      this.heightMapCtrl.selectModifierById(modifierId);
+    };
+    // Live change: just update the mesh transform, no autosave
+    this.rightPanel.onLiveChange = (entity) => {
+      this.handleEntityChange(entity);
+    };
+
+    // Capture history when a gizmo drag begins (before the transform changes)
+    this.gizmo.transformControls.addEventListener('mouseDown', () => {
+      this.captureHistory();
+    });
+    // After drag ends, autosave the result
+    this.gizmo.transformControls.addEventListener('mouseUp', () => {
+      this.autoSave();
+    });
+
+    // ── HeightMapController callbacks ──
+    this.heightMapCtrl.onModifierSelected = (m) => {
+      this.rightPanel.inspectModifier(m);
+      if (this.currentMode === 'height') this.refreshOutliner();
+    };
+    this.heightMapCtrl.onModifiersChanged = () => {
+      // Re-apply terrain height to all room entities and floor mesh
+      this.refreshEntityTerrainY();
+      this.rebuildFloorAndWalls();
+      if (this.currentMode === 'height') this.refreshOutliner();
+      this.autoSave();
+    };
 
     // ── Gizmo change ──
     this.gizmo.setOnChange((obj) => {
@@ -186,8 +265,11 @@ export class EditorApp {
         return;
       }
 
+      // Store entity position as offset ABOVE terrain surface
+      // (world Y = entity.position.y + terrainHeight at that XZ)
+      const terrainY = this.heightMapCtrl.getHeightAt(obj.position.x, obj.position.z);
       entity.transform.position.x = parseFloat(obj.position.x.toFixed(3));
-      entity.transform.position.y = parseFloat(obj.position.y.toFixed(3));
+      entity.transform.position.y = parseFloat((obj.position.y - terrainY).toFixed(3));
       entity.transform.position.z = parseFloat(obj.position.z.toFixed(3));
 
       entity.transform.rotation.x = parseFloat(THREE.MathUtils.radToDeg(obj.rotation.x).toFixed(2));
@@ -256,9 +338,20 @@ export class EditorApp {
       this.selection.update();
     });
 
+    // ── Camera Preview Panel ──
+    this.cameraPreview = new CameraPreviewPanel(
+      container,
+      this.viewport.renderer,
+      this.viewport.scene,
+    );
+    this.viewport.onPostRender(() => {
+      this.cameraPreview.render();
+    });
+
     this.setupKeyboardShortcuts();
 
     this.tryRestoreWorld();
+    this.fetchAndSetAssets();
     
     // Default to World Map
     this.topPanel.setMode('world');
@@ -273,20 +366,45 @@ export class EditorApp {
     this.currentMode = mode;
     this.selection.deselect();
     this.leftPanel.setMode(mode);
-    
+    this.rightPanel.inspectEntity(null);
+
     if (mode === 'world') {
+      this.selection.enabled = false;
       this.roomGroup.visible = false;
       this.gizmo.detach();
       this.worldMapCtrl.activate();
-      // Ensure worldMapCtrl matches leftPanel tool
+      this.heightMapCtrl.deactivate();
       this.worldMapCtrl.setTool(this.leftPanel.getTool());
+      if (this.floorMesh) this.floorMesh.visible = true;
+      this.cameraPreview.hide();
+      this.refreshOutliner();
       this.toast('Draw room shape outline on the grid', 'info');
-    } else {
+    } else if (mode === 'height') {
+      this.selection.enabled = false;
       this.worldMapCtrl.deactivate();
+      this.gizmo.detach();
       this.roomGroup.visible = true;
+      if (this.floorMesh) this.floorMesh.visible = false;
       if (!this.activeRoom && this.world.rooms.length > 0) {
         this.selectRoom(this.world.rooms[0].id);
       }
+      if (this.activeRoom) {
+        this.heightMapCtrl.activate(this.activeRoom);
+      }
+      this.cameraPreview.hide();
+      this.refreshOutliner();
+      this.toast('Click to add elevation nodes. Enter to finalize a ridge line.', 'info');
+    } else {
+      this.selection.enabled = true;
+      this.worldMapCtrl.deactivate();
+      this.heightMapCtrl.deactivate();
+      this.roomGroup.visible = true;
+      if (this.floorMesh) this.floorMesh.visible = true;
+      if (!this.activeRoom && this.world.rooms.length > 0) {
+        this.selectRoom(this.world.rooms[0].id);
+      }
+      this.refreshOutliner();
+      this.cameraPreview.show();
     }
   }
   
@@ -296,10 +414,12 @@ export class EditorApp {
     
     this.world.activeRoomId = id;
     this.activeRoom = room;
+    this.heightMapCtrl.setRoom(room);
     this.menuBar.updateRoomInfo(room.name, room.id);
     
     // Rebuild room 3D meshes (precautionary)
     this.rebuildRoomView();
+    this.refreshOutliner();
     
     if (this.currentMode === 'world') {
        this.rightPanel.inspectRoom(room);
@@ -312,59 +432,84 @@ export class EditorApp {
   private rebuildRoomView() {
     this.selection.deselect();
     // Clear old entities
-    for (const [id, mesh] of this.meshMap) {
+    for (const [, mesh] of this.meshMap) {
       this.roomGroup.remove(mesh);
       this.disposeMesh(mesh);
     }
     this.meshMap.clear();
     this.entityMap.clear();
-    
+
     if (!this.activeRoom) return;
-    
+
     for (const entity of this.activeRoom.entities) {
       this.entityMap.set(entity.id, entity);
       const obj = this.factory.create(entity);
+      // Offset mesh Y by terrain height at the entity's XZ position
+      const terrainY = this.heightMapCtrl.getHeightAt(entity.transform.position.x, entity.transform.position.z);
+      obj.position.y += terrainY;
       this.meshMap.set(entity.id, obj);
       this.roomGroup.add(obj);
     }
-    
+
     this.rebuildFloorAndWalls();
   }
 
   private rebuildFloorAndWalls() {
     if (this.floorMesh) {
       this.roomGroup.remove(this.floorMesh);
+      this.floorMesh.geometry.dispose();
+      (this.floorMesh.material as THREE.Material).dispose();
       this.floorMesh = null;
     }
     if (this.wallsMesh) {
       this.roomGroup.remove(this.wallsMesh);
+      this.wallsMesh.geometry.dispose();
+      (this.wallsMesh.material as THREE.Material).dispose();
       this.wallsMesh = null;
     }
-    
+
     if (!this.activeRoom || this.activeRoom.outline.length < 3) return;
-    
+
     const outline = WorldMapController.expandOutline(
       this.activeRoom.outline,
       this.activeRoom.cornerRadii
     );
-    const shape = new THREE.Shape();
-    shape.moveTo(outline[0].x, outline[0].y);
-    for (let i = 1; i < outline.length; i++) {
-       shape.lineTo(outline[i].x, outline[i].y);
+
+    // ── Terrain-displaced subdivided floor ─────────────────────────
+    // Compute AABB of the outline
+    let minX = Infinity, minZ = Infinity, maxX = -Infinity, maxZ = -Infinity;
+    for (const v of outline) {
+      minX = Math.min(minX, v.x); minZ = Math.min(minZ, v.y);
+      maxX = Math.max(maxX, v.x); maxZ = Math.max(maxZ, v.y);
     }
-    shape.closePath();
-    
-    // Floor
-    const floorGeo = new THREE.ShapeGeometry(shape);
-    const floorMat = new THREE.MeshStandardMaterial({ 
-      color: 0x1a2030, roughness: 0.8, metalness: 0.1, side: THREE.DoubleSide
+    const fw = maxX - minX + 1;
+    const fd = maxZ - minZ + 1;
+    const cx = (minX + maxX) / 2;
+    const cz = (minZ + maxZ) / 2;
+
+    const FLOOR_SEGS = 48;
+    const floorGeo = new THREE.PlaneGeometry(fw, fd, FLOOR_SEGS, FLOOR_SEGS);
+    floorGeo.rotateX(-Math.PI / 2);
+    floorGeo.translate(cx, 0, cz);
+
+    // Displace vertices by terrain height
+    const posAttr = floorGeo.attributes.position as THREE.BufferAttribute;
+    for (let i = 0; i < posAttr.count; i++) {
+      const vx = posAttr.getX(i);
+      const vz = posAttr.getZ(i);
+      posAttr.setY(i, this.heightMapCtrl.getHeightAt(vx, vz));
+    }
+    posAttr.needsUpdate = true;
+    floorGeo.computeVertexNormals();
+
+    const floorMat = new THREE.MeshStandardMaterial({
+      color: 0x1a2030, roughness: 0.8, metalness: 0.1, side: THREE.DoubleSide,
     });
     this.floorMesh = new THREE.Mesh(floorGeo, floorMat);
-    this.floorMesh.rotation.x = Math.PI / 2;
     this.floorMesh.receiveShadow = true;
     this.roomGroup.add(this.floorMesh);
-    
-    // Walls – single BufferGeometry with shared vertices so rounded corners shade smoothly
+
+    // ── Walls (unchanged — built from outline vertices) ────────────
     const wallHeight = 3;
     const wallMat = new THREE.MeshStandardMaterial({ color: 0x223344, side: THREE.DoubleSide });
     const N = outline.length;
@@ -380,8 +525,9 @@ export class EditorApp {
     let wLen = 0;
     for (let i = 0; i < N; i++) {
       const p = outline[i], u = wLen / wallHeight;
-      wPos[i*6]   = p.x; wPos[i*6+1] = 0;          wPos[i*6+2] = p.y;
-      wPos[i*6+3] = p.x; wPos[i*6+4] = wallHeight;  wPos[i*6+5] = p.y;
+      const baseY = this.heightMapCtrl.getHeightAt(p.x, p.y);
+      wPos[i*6]   = p.x; wPos[i*6+1] = baseY;              wPos[i*6+2] = p.y;
+      wPos[i*6+3] = p.x; wPos[i*6+4] = baseY + wallHeight; wPos[i*6+5] = p.y;
       wUVs[i*4] = u; wUVs[i*4+1] = 0; wUVs[i*4+2] = u; wUVs[i*4+3] = 1;
       wLen += wSeg[i];
     }
@@ -467,23 +613,28 @@ export class EditorApp {
     if (this.currentMode === 'room') {
       this.rebuildRoomView();
     }
+    this.refreshOutliner();
   }
 
   public addEntity(entity: EditorEntity): THREE.Object3D {
-    if (!this.activeRoom) throw new Error("No active room");
-    
+    if (!this.activeRoom) throw new Error('No active room');
+
     this.entityMap.set(entity.id, entity);
     this.activeRoom.entities.push(entity);
 
     const obj = this.factory.create(entity);
+    const terrainY = this.heightMapCtrl.getHeightAt(entity.transform.position.x, entity.transform.position.z);
+    obj.position.y += terrainY;
     this.meshMap.set(entity.id, obj);
     this.roomGroup.add(obj);
 
+    this.refreshOutliner();
     return obj;
   }
 
   public removeEntity(entityId: string) {
     if (!this.activeRoom) return;
+    this.captureHistory();
 
     if (this.selection.selectedObject?.userData?.entityId === entityId) {
       this.selection.deselect();
@@ -501,10 +652,12 @@ export class EditorApp {
     this.entityMap.delete(entityId);
     this.activeRoom.entities = this.activeRoom.entities.filter((e) => e.id !== entityId);
 
+    this.refreshOutliner();
     this.toast('Entity deleted', 'info');
   }
 
   public removeRoom(roomId: string) {
+    this.captureHistory();
     this.world.rooms = this.world.rooms.filter(r => r.id !== roomId);
     if (this.world.activeRoomId === roomId) {
         this.world.activeRoomId = '';
@@ -513,6 +666,7 @@ export class EditorApp {
     }
     this.worldMapCtrl.rebuildRooms();
     this.rebuildRoomView();
+    this.refreshOutliner();
     this.toast('Room deleted', 'info');
   }
 
@@ -527,7 +681,15 @@ export class EditorApp {
     if (this.currentMode === 'world') {
        this.worldMapCtrl.setTool(tool);
     }
-    
+
+    if (this.currentMode === 'height') {
+      if (tool === 'height-point' || tool === 'height-line') {
+        this.heightMapCtrl.setTool(tool as HeightTool);
+      } else if (tool === 'select') {
+        this.heightMapCtrl.setTool('height-select');
+      }
+    }
+
     if (tool === 'select') this.gizmo.detach();
     if (['translate', 'rotate', 'scale'].includes(tool)) {
       this.gizmo.setMode(tool as GizmoMode);
@@ -540,7 +702,9 @@ export class EditorApp {
     if (!mesh) return;
 
     const t = entity.transform;
-    mesh.position.set(t.position.x, t.position.y, t.position.z);
+    // entity.position.y is offset above terrain; add terrain height to get world Y
+    const terrainY = this.heightMapCtrl.getHeightAt(t.position.x, t.position.z);
+    mesh.position.set(t.position.x, t.position.y + terrainY, t.position.z);
     mesh.rotation.set(
       THREE.MathUtils.degToRad(t.rotation.x),
       THREE.MathUtils.degToRad(t.rotation.y),
@@ -552,6 +716,8 @@ export class EditorApp {
 
   private addEntityFromBrowser(dragData: DragData) {
     if (!this.activeRoom) return this.toast('Select a room first!', 'error');
+
+    this.captureHistory();
 
     const entity = createDefaultEntity(dragData.entityType as EntityType);
     const target = this.viewport.controls.target;
@@ -565,6 +731,11 @@ export class EditorApp {
         (entity as PrimitiveEntity).materialType = 'textured';
         (entity as PrimitiveEntity).textureSource = dragData.assetPath;
       }
+    }
+
+    if (entity.type === 'spawn' && dragData.subType === 'customer') {
+      entity.name = 'Customer Spawn';
+      (entity as SpawnEntity).spawnId = 'spawn_customer';
     }
 
     if (entity.type === 'door' && dragData.assetPath) {
@@ -626,6 +797,11 @@ export class EditorApp {
           this.worldMapCtrl.handleKeyDown(e);
       }
 
+      if (e.ctrlKey && e.shiftKey && (e.key === 'Z' || e.key === 'z')) {
+        e.preventDefault(); this.redo(); return;
+      }
+      if (e.ctrlKey && e.key === 'z') { e.preventDefault(); this.undo(); return; }
+
       if (e.key === 'Delete' || e.key === 'Backspace') {
         const selected = this.selection.selectedObject;
         if (selected?.userData?.entityId) this.removeEntity(selected.userData.entityId);
@@ -645,6 +821,28 @@ export class EditorApp {
     this.activeRoom = null;
     this.rebuildRoomView();
     this.toast('New world created', 'info');
+  }
+
+  private _autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /** Update all entity mesh Y-positions to reflect current terrain heights */
+  private refreshEntityTerrainY() {
+    if (!this.activeRoom) return;
+    for (const entity of this.activeRoom.entities) {
+      const mesh = this.meshMap.get(entity.id);
+      if (!mesh) continue;
+      const t = entity.transform;
+      const terrainY = this.heightMapCtrl.getHeightAt(t.position.x, t.position.z);
+      mesh.position.y = t.position.y + terrainY;
+    }
+  }
+
+  private autoSave() {
+    if (this._autoSaveTimer !== null) clearTimeout(this._autoSaveTimer);
+    this._autoSaveTimer = setTimeout(() => {
+      this._autoSaveTimer = null;
+      this.saveWorld();
+    }, 1200);
   }
 
   private async saveWorld() {
@@ -697,6 +895,8 @@ export class EditorApp {
     if (!this.activeRoom) return;
     const selected = this.selection.selectedObject;
     if (!selected?.userData?.entityId) return;
+
+    this.captureHistory();
 
     const sourceEntity = this.entityMap.get(selected.userData.entityId);
     if (!sourceEntity) return;
@@ -863,5 +1063,113 @@ export class EditorApp {
         else c.material?.dispose();
       }
     });
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // History — Undo / Redo
+  // ═══════════════════════════════════════════════════════════════════
+
+  private captureHistory(): void {
+    if (this._suppressHistory) return;
+    const snapshot = JSON.stringify(this.world);
+    console.log('Capture history:', snapshot.length, 'bytes');
+    this.history.push(snapshot);
+  }
+
+  private undo(): void {
+    const current = JSON.stringify(this.world);
+    const prev = this.history.undo(current);
+    console.log('Undo. Has prev:', !!prev);
+    if (prev) {
+      this.restoreWorld(JSON.parse(prev));
+      this.toast('Undo', 'info');
+    }
+  }
+
+  private redo(): void {
+    const current = JSON.stringify(this.world);
+    const next = this.history.redo(current);
+    console.log('Redo. Has next:', !!next);
+    if (next) {
+      this.restoreWorld(JSON.parse(next));
+      this.toast('Redo', 'info');
+    }
+  }
+
+  private restoreWorld(world: WorldProject): void {
+    this.world = world;
+    this.worldMapCtrl.setWorld(this.world);
+    const roomId = this.world.activeRoomId;
+    if (roomId && this.world.rooms.find(r => r.id === roomId)) {
+      this.selectRoom(roomId);
+    } else {
+      this.activeRoom = null;
+      this.rebuildRoomView();
+      this.worldMapCtrl.rebuildRooms();
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // Mesh helpers
+  // ═══════════════════════════════════════════════════════════════════
+
+  /**
+   * Recreate a single entity's Three.js mesh in-place.
+   * Preserves selection state without triggering a full room rebuild.
+   */
+  private refreshEntityMesh(entity: EditorEntity): void {
+    const oldMesh = this.meshMap.get(entity.id);
+    const wasSelected = this.selection.selectedObject === oldMesh;
+
+    if (wasSelected) this.gizmo.detach();
+
+    if (oldMesh) {
+      this.roomGroup.remove(oldMesh);
+      this.disposeMesh(oldMesh);
+    }
+
+    const newMesh = this.factory.create(entity);
+    const terrainY = this.heightMapCtrl.getHeightAt(
+      entity.transform.position.x, entity.transform.position.z
+    );
+    newMesh.position.y += terrainY;
+    this.meshMap.set(entity.id, newMesh);
+    this.roomGroup.add(newMesh);
+
+    if (wasSelected) {
+      this.selection.select(newMesh);
+      const tool = this.leftPanel.getTool();
+      if (['translate', 'rotate', 'scale'].includes(tool)) {
+        this.gizmo.setMode(tool as GizmoMode);
+      }
+      this.gizmo.attach(newMesh);
+    }
+
+    this.refreshOutliner();
+  }
+
+  /** Update the scene outliner to reflect the active mode */
+  private refreshOutliner(): void {
+    if (this.currentMode === 'world') {
+      this.rightPanel.updateWorldList(this.world.rooms, this.world.doors, this.world.activeRoomId ?? undefined);
+    } else if (this.currentMode === 'height') {
+      const modifiers = this.activeRoom?.heightModifiers ?? [];
+      this.rightPanel.updateHeightList(modifiers, this.heightMapCtrl.getSelectedModifierId() ?? undefined);
+    } else {
+      const selectedId = this.selection.selectedObject?.userData?.entityId as string | undefined;
+      this.rightPanel.updateEntityList(this.activeRoom?.entities ?? [], selectedId);
+    }
+    this.cameraPreview.updateCameraList(this.activeRoom?.entities ?? []);
+  }
+
+  /** Fetch asset list from the dev server and pass it to the inspector */
+  private async fetchAndSetAssets(): Promise<void> {
+    try {
+      const res = await fetch('/api/assets');
+      if (res.ok) {
+        const data = await res.json();
+        this.rightPanel.setAssets(data);
+      }
+    } catch { /* assets are optional */ }
   }
 }

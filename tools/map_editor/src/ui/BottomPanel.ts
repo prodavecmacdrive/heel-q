@@ -306,13 +306,21 @@ export class BottomPanel {
           <circle cx="12" cy="7" r="4"/>
         </svg>`,
       },
+      {
+        name: 'Customer', type: 'spawn', cssClass: 'card-customer',
+        icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+          <circle cx="12" cy="7" r="4"/>
+          <path d="M7 14s1.5-2 5-2 5 2 5 2"/>
+        </svg>`,
+      },
     ];
 
     return `<div class="browser-grid">
       ${funcs.map(f => `
         <div class="browser-card ${f.cssClass}" draggable="true"
-             data-entity-type="${f.type}" data-sub-type=""
-             id="func-card-${f.type}">
+             data-entity-type="${f.type}" data-sub-type="${f.name === 'Customer' ? 'customer' : ''}"
+             id="func-card-${f.type}-${f.name.toLowerCase()}">
           <div class="browser-card-icon">${f.icon}</div>
           <span class="browser-card-label">${f.name}</span>
         </div>

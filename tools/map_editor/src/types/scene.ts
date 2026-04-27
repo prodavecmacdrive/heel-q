@@ -7,6 +7,9 @@ export {
   type DoorDef,
   type RoomData,
   type WorldProject,
+  type PointModifier,
+  type LineModifier,
+  type HeightModifier,
   createDefaultWorld,
   createDefaultRoom,
 } from '@heel-quest/shared-core';

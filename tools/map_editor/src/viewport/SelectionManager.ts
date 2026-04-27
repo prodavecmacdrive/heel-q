@@ -15,9 +15,15 @@ export class SelectionManager {
   /** The currently selected Three.js object (has userData.entityId) */
   public selectedObject: THREE.Object3D | null = null;
 
+  /** When false, pointer clicks are ignored (e.g. in world/height map modes) */
+  public enabled = true;
+
   /** Oriented wireframe highlight — lives as a child of the selected object so
    *  it automatically inherits position, rotation, and scale (true OBB display). */
   private highlight: THREE.LineSegments | null = null;
+
+  /** Hover highlight — shown when the entity is moused over in the outliner */
+  private hoverHighlight: THREE.LineSegments | null = null;
 
   constructor(viewport: ViewportManager) {
     this.viewport = viewport;
@@ -70,7 +76,30 @@ export class SelectionManager {
    * The returned LineSegments is added as a child of obj so it inherits
    * all transforms including rotation, giving a true oriented bounding box.
    */
-  private buildOrientedHighlight(obj: THREE.Object3D): THREE.LineSegments {
+  /** Highlight an entity by id when hovered in the scene outliner */
+  public setHover(entityId: string | null): void {
+    if (this.hoverHighlight) {
+      if (this.hoverHighlight.parent) this.hoverHighlight.parent.remove(this.hoverHighlight);
+      this.hoverHighlight.geometry.dispose();
+      (this.hoverHighlight.material as THREE.Material).dispose();
+      this.hoverHighlight = null;
+    }
+    if (!entityId) return;
+
+    let target: THREE.Object3D | null = null;
+    this.viewport.scene.traverse(child => {
+      if (!target && child.userData?.entityId === entityId && !child.userData.__selectionHighlight)
+        target = child;
+    });
+    if (!target || target === this.selectedObject) return;
+
+    this.hoverHighlight = this.buildOrientedHighlight(target as THREE.Object3D, 0x88ccff);
+    (this.hoverHighlight.material as THREE.LineBasicMaterial).opacity = 0.55;
+    (this.hoverHighlight.material as THREE.LineBasicMaterial).transparent = true;
+    (target as THREE.Object3D).add(this.hoverHighlight);
+  }
+
+  private buildOrientedHighlight(obj: THREE.Object3D, color: number = 0x58a6ff): THREE.LineSegments {
     // Force all world matrices current before we compute bounds
     obj.updateWorldMatrix(true, true);
 
@@ -103,7 +132,7 @@ export class SelectionManager {
     const geo  = new THREE.EdgesGeometry(
       new THREE.BoxGeometry(size.x + pad, size.y + pad, size.z + pad)
     );
-    const mat  = new THREE.LineBasicMaterial({ color: 0x58a6ff });
+    const mat  = new THREE.LineBasicMaterial({ color });
     const lines = new THREE.LineSegments(geo, mat);
     lines.position.copy(center);
     lines.userData.__selectionHighlight = true;
@@ -116,6 +145,7 @@ export class SelectionManager {
   private onPointerDown(e: PointerEvent) {
     // Only left-click, only when not dragging gizmo
     if (e.button !== 0) return;
+    if (!this.enabled) return;
 
     const ndc = this.viewport.getNDC(e.clientX, e.clientY);
     this.raycaster.setFromCamera(ndc, this.viewport.camera);

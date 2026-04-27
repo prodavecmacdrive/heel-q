@@ -1,11 +1,13 @@
 import * as THREE from 'three';
 import { World } from '../ecs/World';
-import { RoomData, EntitySpawnDef, CameraDef } from './RoomData';
+import { RoomData, EntitySpawnDef, CameraDef, HeightModifier } from './RoomData';
 import { TextureManager } from '../rendering/TextureManager';
 import { SpriteAnimation, AtlasAnimation, Transform, MeshRenderer, DoorMarker, CameraMarker } from '../ecs/Component';
 import { NavGrid } from '../nav/NavGrid';
 import { Entity } from '../ecs/Entity';
+import { CHARACTER_HEIGHT } from '../constants';
 import type { SpriteSheetMeta } from '@heel-quest/shared-core';
+import { computeTerrainHeight } from '@heel-quest/shared-core';
 
 export class RoomManager {
     public currentRoomId: string | null = null;
@@ -17,6 +19,8 @@ export class RoomManager {
     private camera: THREE.PerspectiveCamera;
     private roomAudioElements: HTMLAudioElement[] = [];
     private sheetMeta: Map<string, SpriteSheetMeta> = new Map();
+    /** Height modifiers of the currently-loaded room (empty = flat terrain) */
+    private currentHeightModifiers: HeightModifier[] = [];
 
     constructor(
         world: World,
@@ -35,12 +39,23 @@ export class RoomManager {
         this.sheetMeta = meta;
     }
 
+    /**
+     * Compute the terrain Y displacement at a world XZ position for the current room.
+     * Returns 0 when the room has no height modifiers (flat terrain).
+     */
+    public getFloorY(wx: number, wz: number): number {
+        return computeTerrainHeight(this.currentHeightModifiers, wx, wz);
+    }
+
     async loadRoom(roomData: RoomData) {
         // ── 1. Preserve the Player entity across transitions ───────
         const existingPlayer = this.findPlayerEntity();
         this.unloadCurrentRoom(existingPlayer);
 
         this.currentRoomId = roomData.id;
+
+        // Store height modifiers for this room (used by getFloorY + MovementSystem)
+        this.currentHeightModifiers = roomData.heightModifiers ?? [];
 
         // ── 2. Camera (multi-camera support) ────────────────────────
         if (roomData.cameras && roomData.cameras.length > 0) {
@@ -96,40 +111,66 @@ export class RoomManager {
         const floorY = 0; 
 
 
-        // If we have a vectorized outline, construct a ShapeGeometry!
+        // If we have a vectorized outline, construct a terrain-displaced floor mesh
         if (roomData.outline && roomData.outline.length >= 3) {
             const outline = roomData.outline;
-            const shape = new THREE.Shape();
-            shape.moveTo(outline[0].x, outline[0].y); // y is z
-            for (let i = 1; i < outline.length; i++) {
-                shape.lineTo(outline[i].x, outline[i].y);
-            }
-            shape.closePath();
 
-            // Floor
-            if (floorTex) {
-               floorTex.wrapS = THREE.RepeatWrapping;
-               floorTex.wrapT = THREE.RepeatWrapping;
-               floorTex.repeat.set(0.5, 0.5);
+            // Compute AABB of the outline
+            let minX = Infinity, minZ = Infinity, maxX = -Infinity, maxZ = -Infinity;
+            for (const p of outline) {
+                if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+                if (p.y < minZ) minZ = p.y; if (p.y > maxZ) maxZ = p.y;
             }
-            const floorMat = new THREE.MeshStandardMaterial({ map: floorTex || undefined, color: floorTex ? 0xffffff : 0x1a2030, side: THREE.DoubleSide, roughness: 0.9, metalness: 0.0 });
-            const floorGeo = new THREE.ShapeGeometry(shape);
+            const fw = maxX - minX + 1;
+            const fd = maxZ - minZ + 1;
+            const fcx = (minX + maxX) / 2;
+            const fcz = (minZ + maxZ) / 2;
+            boundaries.floor.width  = maxX - minX;
+            boundaries.floor.depth  = maxZ - minZ;
+            boundaries.floor.position = { x: fcx, y: floorY, z: fcz };
+
+            // Subdivided terrain floor
+            const FLOOR_SEGS = 64;
+            if (floorTex) {
+                floorTex.wrapS = THREE.RepeatWrapping;
+                floorTex.wrapT = THREE.RepeatWrapping;
+                floorTex.repeat.set(0.5, 0.5);
+            }
+            const floorMat = new THREE.MeshStandardMaterial({
+                map: floorTex || undefined,
+                color: floorTex ? 0xffffff : 0x1a2030,
+                side: THREE.DoubleSide, roughness: 0.9, metalness: 0.0
+            });
+            const floorGeo = new THREE.PlaneGeometry(fw, fd, FLOOR_SEGS, FLOOR_SEGS);
+            floorGeo.rotateX(-Math.PI / 2);
+            floorGeo.translate(fcx, 0, fcz);
+
+            // Displace vertices by terrain height
+            const posAttr = floorGeo.attributes.position as THREE.BufferAttribute;
+            for (let i = 0; i < posAttr.count; i++) {
+                const vx = posAttr.getX(i);
+                const vz = posAttr.getZ(i);
+                posAttr.setY(i, floorY + this.getFloorY(vx, vz));
+            }
+            posAttr.needsUpdate = true;
+            floorGeo.computeVertexNormals();
+
             const floorMesh = new THREE.Mesh(floorGeo, floorMat);
-            // Rotate so that +Y becomes +Z
-            floorMesh.rotation.x = Math.PI / 2;
-            floorMesh.position.set(0, floorY, 0); // Coordinates are absolute
             floorMesh.receiveShadow = true;
             this.createBoundaryEntity(floorMesh, true);
-            
-            // Walls
+
+            // Walls built from outline vertices; base Y follows terrain at each vertex
             const wallHeight = 4;
             const wallTex = this.textureManager.getTexture('lab_wall');
             if (wallTex) {
-               wallTex.wrapS = THREE.RepeatWrapping;
-               wallTex.wrapT = THREE.RepeatWrapping;
+                wallTex.wrapS = THREE.RepeatWrapping;
+                wallTex.wrapT = THREE.RepeatWrapping;
             }
-            const wallMat = new THREE.MeshStandardMaterial({ map: wallTex || undefined, color: wallTex ? 0xffffff : 0x223344, side: THREE.DoubleSide, roughness: 0.9, metalness: 0.0 });
-            // Single wall mesh – shared vertices give smooth normals at rounded corners
+            const wallMat = new THREE.MeshStandardMaterial({
+                map: wallTex || undefined,
+                color: wallTex ? 0xffffff : 0x223344,
+                side: THREE.DoubleSide, roughness: 0.9, metalness: 0.0
+            });
             const N = outline.length;
             const wPos = new Float32Array(N * 2 * 3);
             const wUVs = new Float32Array(N * 2 * 2);
@@ -143,8 +184,9 @@ export class RoomManager {
             let wLen = 0;
             for (let i = 0; i < N; i++) {
                 const p = outline[i], u = wLen / wallHeight;
-                wPos[i*6]   = p.x; wPos[i*6+1] = floorY;              wPos[i*6+2] = p.y;
-                wPos[i*6+3] = p.x; wPos[i*6+4] = floorY + wallHeight; wPos[i*6+5] = p.y;
+                const baseY = floorY + this.getFloorY(p.x, p.y);
+                wPos[i*6]   = p.x; wPos[i*6+1] = baseY;              wPos[i*6+2] = p.y;
+                wPos[i*6+3] = p.x; wPos[i*6+4] = baseY + wallHeight; wPos[i*6+5] = p.y;
                 wUVs[i*4] = u; wUVs[i*4+1] = 0; wUVs[i*4+2] = u; wUVs[i*4+3] = 1;
                 wLen += wSeg[i];
             }
@@ -160,19 +202,6 @@ export class RoomManager {
             const wallMesh = new THREE.Mesh(wallGeo, wallMat);
             wallMesh.receiveShadow = true;
             this.createBoundaryEntity(wallMesh, false);
-            
-            // Also need roughly the right nav grid center
-            // Let's compute bounding box
-            let minX = Infinity, minZ = Infinity, maxX = -Infinity, maxZ = -Infinity;
-            for(let p of outline) {
-                if(p.x < minX) minX = p.x;
-                if(p.x > maxX) maxX = p.x;
-                if(p.y < minZ) minZ = p.y;
-                if(p.y > maxZ) maxZ = p.y;
-            }
-            boundaries.floor.width = maxX - minX;
-            boundaries.floor.depth = maxZ - minZ;
-            boundaries.floor.position = { x: (minX + maxX)/2, y: floorY, z: (minZ + maxZ)/2 };
 
         } else {
             // Fallback rectangular floor
@@ -214,27 +243,38 @@ export class RoomManager {
 
         // ── 7. Spawn scene entities (props, lights, doors — NOT the player) ───
         for (const entityDef of roomData.entities) {
+            // entity.position.y = offset above terrain; add terrain height to get world Y
+            const entityTerrainY = floorY + this.getFloorY(entityDef.position.x, entityDef.position.z);
+
             if (entityDef.entityType === 'primitive') {
-                this.spawnPrimitiveEntity(entityDef, floorY);
+                this.spawnPrimitiveEntity(entityDef, entityTerrainY);
             } else if (entityDef.entityType === 'light') {
-                this.spawnLightEntity(entityDef);
+                this.spawnLightEntity(entityDef, entityTerrainY);
             } else if (entityDef.entityType === 'door') {
-                this.spawnDoorEntity3D(entityDef, floorY);
+                this.spawnDoorEntity3D(entityDef, entityTerrainY);
             } else if (entityDef.entityType === 'sound') {
                 this.spawnSoundEntity(entityDef);
                 continue; // sound entities have no obstacle geometry
             } else if (entityDef.entityType === 'animated_sprite' && entityDef.atlasFrames) {
-                this.spawnAtlasSpriteEntity(entityDef, floorY);
+                this.spawnAtlasSpriteEntity(entityDef, entityTerrainY);
             } else {
                 // sprite or animated_sprite (no pre-parsed atlas) — scene prop
-                this.spawnSpriteEntity(entityDef, floorY, false);
+                this.spawnSpriteEntity(entityDef, entityTerrainY, false);
             }
 
             // Stamp obstacles onto navgrid
             if (entityDef.isObstacle) {
-                const hw = entityDef.obstacleHalfWidth ?? entityDef.width / 2;
-                const hd = entityDef.obstacleHalfDepth ?? 0.8;
-                this.navGrid.stampObstacle(entityDef.position.x, entityDef.position.z, hw, hd);
+                // If the object is positioned higher than the character's height profile, skip collision stamping.
+                // This allows the character to pass underneath "floating" or "hanging" objects.
+                if (entityDef.position.y <= CHARACTER_HEIGHT) {
+                    const shape = this.computeObstacleShape(entityDef);
+                    if (shape.kind === 'circle') {
+                        this.navGrid.stampObstacleCircle(entityDef.position.x, entityDef.position.z, shape.radius);
+                    } else {
+                        const worldShape = shape.points.map(p => ({ x: p.x + entityDef.position.x, z: p.z + entityDef.position.z }));
+                        this.navGrid.stampObstaclePolygon(worldShape);
+                    }
+                }
             }
         }
 
@@ -251,6 +291,8 @@ export class RoomManager {
             if (roomData.spawnPoints && roomData.spawnPoints.length > 0) {
                 spawnPos = roomData.spawnPoints[0].position;
             }
+            // Player spawn Y = terrain height at spawn XZ (position.y offset is assumed 0)
+            const spawnTerrainY = floorY + this.getFloorY(spawnPos.x, spawnPos.z);
 
             if (roomData.characterSequenceJson || roomData.characterSequenceSource || (roomData.characterSequenceFrames && roomData.characterSequenceFrames.length > 0)) {
                 this.spawnAtlasSpriteEntity(
@@ -268,14 +310,14 @@ export class RoomManager {
                         castShadow: roomData.characterCastShadow ?? false,
                         receiveShadow: roomData.characterReceiveShadow ?? false,
                     },
-                    floorY,
+                    spawnTerrainY,
                     true,
                     playerSpeed
                 );
             } else {
                 this.spawnSpriteEntity(
                     { spriteKey: playerSpriteKey, width: 2, height: 3, position: spawnPos, castShadow: roomData.characterCastShadow ?? false, receiveShadow: roomData.characterReceiveShadow ?? false },
-                    floorY, true, playerSpeed
+                    spawnTerrainY, true, playerSpeed
                 );
             }
         }
@@ -283,8 +325,13 @@ export class RoomManager {
         // ── 9. If player survived from previous room, update membership ──
         if (existingPlayer !== null) {
             this.world.addComponent(existingPlayer, 'RoomMember', { roomId: roomData.id });
+            // floorY is now dynamic (terrain-aware); MovementSystem will track it per frame
             const player = this.world.getComponent(existingPlayer, 'Player')!;
-            player.floorY = floorY;
+            const transform = this.world.getComponent(existingPlayer, 'Transform')!;
+            player.floorY = floorY + this.getFloorY(
+                (transform as Transform).position.x,
+                (transform as Transform).position.z
+            );
         }
     }
 
@@ -293,6 +340,212 @@ export class RoomManager {
     private findPlayerEntity(): Entity | null {
         const players = this.world.queryEntities(['Player']);
         return players.length > 0 ? players[0] : null;
+    }
+
+    private computeObstacleShape(def: EntitySpawnDef):
+        | { kind: 'circle'; radius: number }
+        | { kind: 'polygon'; points: Array<{ x: number; z: number }> } {
+        const sx = Math.abs(def.scale?.x ?? 1);
+        const sy = Math.abs(def.scale?.y ?? 1);
+        const sz = Math.abs(def.scale?.z ?? 1);
+
+        const rotX = (def.rotation?.x ?? 0) * Math.PI / 180;
+        const rotY = (def.rotation?.y ?? 0) * Math.PI / 180;
+        const rotZ = (def.rotation?.z ?? 0) * Math.PI / 180;
+        const quat = new THREE.Quaternion().setFromEuler(new THREE.Euler(rotX, rotY, rotZ, 'XYZ'));
+
+        if (def.obstacleHalfWidth !== undefined || def.obstacleHalfDepth !== undefined) {
+            const halfW = def.obstacleHalfWidth ?? def.width / 2;
+            const halfD = def.obstacleHalfDepth ?? 0.8;
+            const corners = [
+                new THREE.Vector3(-halfW, 0, -halfD),
+                new THREE.Vector3(halfW, 0, -halfD),
+                new THREE.Vector3(halfW, 0, halfD),
+                new THREE.Vector3(-halfW, 0, halfD)
+            ];
+            return {
+                kind: 'polygon',
+                points: this.convexHull2D(this.projectToXZ(corners, quat))
+            };
+        }
+
+        const width = def.width ?? 1;
+        const height = def.height ?? 1;
+
+        if (def.geometryType === 'sphere') {
+            const radius = 0.5 * Math.max(sx, sz);
+            return { kind: 'circle', radius };
+        }
+
+        if (def.geometryType === 'cylinder' || def.geometryType === 'cone') {
+            const radius = 0.5 * Math.max(sx, sz);
+            return { kind: 'circle', radius };
+        }
+
+        if (def.geometryType === 'plane') {
+            const planeBaseSize = 2;
+            const halfW = width * planeBaseSize / 2;
+            const halfH = height * planeBaseSize / 2;
+            const xAxis = new THREE.Vector3(halfW, 0, 0).applyQuaternion(quat);
+            const yAxis = new THREE.Vector3(0, halfH, 0).applyQuaternion(quat);
+
+            const corners = [
+                xAxis.clone().add(yAxis),
+                xAxis.clone().sub(yAxis),
+                xAxis.clone().negate().sub(yAxis),
+                xAxis.clone().negate().add(yAxis)
+            ];
+
+            const projected = corners.map(p => ({ x: p.x, z: p.z }));
+            const hull = this.convexHull2D(projected);
+            return { kind: 'polygon', points: hull.length >= 3 ? hull : this.buildThinPolygon(projected, 0.05) };
+        }
+
+        // Box / rectangular primitive footprint
+        const hw = width * sx / 2;
+        const hh = height * sy / 2;
+        const hd = 0.5 * sz;
+
+        const corners = [
+            new THREE.Vector3( hw,  hh,  hd),
+            new THREE.Vector3( hw,  hh, -hd),
+            new THREE.Vector3( hw, -hh,  hd),
+            new THREE.Vector3( hw, -hh, -hd),
+            new THREE.Vector3(-hw,  hh,  hd),
+            new THREE.Vector3(-hw,  hh, -hd),
+            new THREE.Vector3(-hw, -hh,  hd),
+            new THREE.Vector3(-hw, -hh, -hd)
+        ];
+
+        return {
+            kind: 'polygon',
+            points: this.convexHull2D(this.projectToXZ(corners, quat))
+        };
+    }
+
+    private computeObstacleExtents(def: EntitySpawnDef): { halfWidth: number; halfDepth: number } {
+        const shape = this.computeObstacleShape(def);
+        if (shape.kind === 'circle') {
+            return { halfWidth: shape.radius, halfDepth: shape.radius };
+        }
+
+        let maxX = 0;
+        let maxZ = 0;
+        for (const point of shape.points) {
+            maxX = Math.max(maxX, Math.abs(point.x));
+            maxZ = Math.max(maxZ, Math.abs(point.z));
+        }
+        return { halfWidth: Math.max(maxX, 0.1), halfDepth: Math.max(maxZ, 0.1) };
+    }
+
+    private projectToXZ(points: THREE.Vector3[], quat: THREE.Quaternion): Array<{ x: number; z: number }> {
+        return points.map(p => {
+            const transformed = p.clone().applyQuaternion(quat);
+            return { x: transformed.x, z: transformed.z };
+        });
+    }
+
+    private convexHull2D(points: Array<{ x: number; z: number }>): Array<{ x: number; z: number }> {
+        if (points.length <= 3) return points.slice();
+        const sorted = points.slice().sort((a, b) => a.x === b.x ? a.z - b.z : a.x - b.x);
+        const cross = (o: { x: number; z: number }, a: { x: number; z: number }, b: { x: number; z: number }) =>
+            (a.x - o.x) * (b.z - o.z) - (a.z - o.z) * (b.x - o.x);
+
+        const lower: Array<{ x: number; z: number }> = [];
+        for (const point of sorted) {
+            while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], point) <= 0) {
+                lower.pop();
+            }
+            lower.push(point);
+        }
+
+        const upper: Array<{ x: number; z: number }> = [];
+        for (let i = sorted.length - 1; i >= 0; i--) {
+            const point = sorted[i];
+            while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], point) <= 0) {
+                upper.pop();
+            }
+            upper.push(point);
+        }
+
+        upper.pop();
+        lower.pop();
+        return lower.concat(upper);
+    }
+
+    private buildThinPolygon(points: Array<{ x: number; z: number }>, halfThickness: number): Array<{ x: number; z: number }> {
+        const unique = Array.from(new Map(points.map(p => [`${p.x.toFixed(5)},${p.z.toFixed(5)}`, p])).values());
+        if (unique.length < 2) {
+            return [
+                { x: -halfThickness, z: -halfThickness },
+                { x: halfThickness, z: -halfThickness },
+                { x: halfThickness, z: halfThickness },
+                { x: -halfThickness, z: halfThickness }
+            ];
+        }
+
+        const p0 = unique[0];
+        const p1 = unique.length === 2 ? unique[1] : unique[unique.length - 1];
+        const dx = p1.x - p0.x;
+        const dz = p1.z - p0.z;
+        const len = Math.hypot(dx, dz) || 1;
+        const nx = -dz / len;
+        const nz = dx / len;
+
+        return [
+            { x: p0.x + nx * halfThickness, z: p0.z + nz * halfThickness },
+            { x: p1.x + nx * halfThickness, z: p1.z + nz * halfThickness },
+            { x: p1.x - nx * halfThickness, z: p1.z - nz * halfThickness },
+            { x: p0.x - nx * halfThickness, z: p0.z - nz * halfThickness }
+        ];
+    }
+
+    private pointInPolygon(x: number, z: number, polygon: Array<{ x: number; z: number }>): boolean {
+        let inside = false;
+        const n = polygon.length;
+        for (let i = 0, j = n - 1; i < n; j = i++) {
+            const xi = polygon[i].x;
+            const zi = polygon[i].z;
+            const xj = polygon[j].x;
+            const zj = polygon[j].z;
+            const intersect = ((zi > z) !== (zj > z)) &&
+                (x < (xj - xi) * (z - zi) / (zj - zi) + xi);
+            if (intersect) inside = !inside;
+        }
+        return inside;
+    }
+
+    private createCollisionWireframe(def: EntitySpawnDef, floorY: number) {
+        const shape = this.computeObstacleShape(def);
+        let points: THREE.Vector3[];
+
+        if (shape.kind === 'circle') {
+            const segments = 32;
+            points = [];
+            for (let i = 0; i <= segments; i++) {
+                const theta = (i / segments) * Math.PI * 2;
+                points.push(new THREE.Vector3(
+                    Math.cos(theta) * shape.radius,
+                    0.02,
+                    Math.sin(theta) * shape.radius
+                ));
+            }
+        } else {
+            points = shape.points.map(p => new THREE.Vector3(p.x, 0.02, p.z));
+            if (points.length > 0) {
+                points.push(points[0].clone());
+            }
+        }
+
+        const geo = new THREE.BufferGeometry().setFromPoints(points);
+        const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0xff0000 }));
+        line.position.set(def.position.x, floorY, def.position.z);
+        line.renderOrder = 1000;
+        this.scene.add(line);
+
+        const debugEntity = this.world.createEntity();
+        this.world.addComponent(debugEntity, 'RoomMember', { roomId: this.currentRoomId! });
+        this.world.addComponent(debugEntity, 'MeshRenderer', { mesh: line });
     }
 
     private createBoundaryEntity(mesh: THREE.Mesh, isFloor: boolean) {
@@ -365,6 +618,14 @@ export class RoomManager {
 
         const mesh = new THREE.Mesh(geo, mat);
 
+        if (def.rotation) {
+            mesh.rotation.set(
+                def.rotation.x * Math.PI / 180,
+                def.rotation.y * Math.PI / 180,
+                def.rotation.z * Math.PI / 180
+            );
+        }
+
         // Apply position and scale from editor
         const sx = def.scale?.x ?? 1;
         const sy = def.scale?.y ?? 1;
@@ -377,6 +638,10 @@ export class RoomManager {
         mesh.receiveShadow = def.receiveShadow ?? true;
 
         this.scene.add(mesh);
+
+        if (def.isObstacle) {
+            this.createCollisionWireframe(def, floorY);
+        }
 
         const entity = this.world.createEntity();
         this.world.addComponent(entity, 'RoomMember', { roomId: this.currentRoomId! });
@@ -404,7 +669,7 @@ export class RoomManager {
     /**
      * Spawn a light entity from the editor.
      */
-    private spawnLightEntity(def: EntitySpawnDef) {
+    private spawnLightEntity(def: EntitySpawnDef, baseY: number = 0) {
         const color = new THREE.Color(def.lightColor || '#ffffff');
         const intensity = def.lightIntensity ?? 1;
         const distance = def.lightDistance ?? 10;
@@ -422,7 +687,7 @@ export class RoomManager {
                 break;
         }
 
-        light.position.set(def.position.x, def.position.y, def.position.z);
+        light.position.set(def.position.x, def.position.y + baseY, def.position.z);
         (light as any).isRoomLight = true;
 
         // Shadow configuration
@@ -484,6 +749,14 @@ export class RoomManager {
         const geo = new THREE.PlaneGeometry(1, 1);
         const mesh = new THREE.Mesh(geo, mat);
 
+        if (def.rotation) {
+            mesh.rotation.set(
+                def.rotation.x * Math.PI / 180,
+                def.rotation.y * Math.PI / 180,
+                def.rotation.z * Math.PI / 180
+            );
+        }
+
         // ── Feet-first positioning ────────────────────────────────
         const feetX = def.position.x;
         const feetZ = def.position.z;
@@ -492,11 +765,15 @@ export class RoomManager {
         mesh.receiveShadow = def.receiveShadow ?? false;
         this.scene.add(mesh);
 
+        if (def.isObstacle && def.position.y <= CHARACTER_HEIGHT) {
+            this.createCollisionWireframe(def, floorY);
+        }
+
         const entity = this.world.createEntity();
         this.world.addComponent(entity, 'RoomMember', { roomId: this.currentRoomId! });
         this.world.addComponent(entity, 'Transform', {
             position: new THREE.Vector3(feetX, floorY, feetZ),
-            rotation: new THREE.Euler(),
+            rotation: mesh.rotation.clone(),
             scale: new THREE.Vector3(1, 1, 1)
         });
         
@@ -525,10 +802,8 @@ export class RoomManager {
 
         // Obstacle tag
         if (def.isObstacle) {
-            this.world.addComponent(entity, 'Obstacle', {
-                halfWidth: def.obstacleHalfWidth ?? def.width / 2,
-                halfDepth: def.obstacleHalfDepth ?? 0.8
-            });
+            const { halfWidth, halfDepth } = this.computeObstacleExtents(def);
+            this.world.addComponent(entity, 'Obstacle', { halfWidth, halfDepth });
         }
 
         // Sprite animation — prefer sheet metadata, fall back to per-entity columns/rows
@@ -584,6 +859,14 @@ export class RoomManager {
         const geo  = new THREE.PlaneGeometry(1, 1);
         const mesh = new THREE.Mesh(geo, mat);
 
+        if (def.rotation) {
+            mesh.rotation.set(
+                def.rotation.x * Math.PI / 180,
+                def.rotation.y * Math.PI / 180,
+                def.rotation.z * Math.PI / 180
+            );
+        }
+
         const feetX = def.position.x;
         const feetZ = def.position.z;
         mesh.position.set(feetX, floorY, feetZ);
@@ -591,11 +874,15 @@ export class RoomManager {
         mesh.receiveShadow = def.receiveShadow ?? false;
         this.scene.add(mesh);
 
+        if (def.isObstacle && def.position.y <= CHARACTER_HEIGHT) {
+            this.createCollisionWireframe(def, floorY);
+        }
+
         const entity = this.world.createEntity();
         this.world.addComponent(entity, 'RoomMember',  { roomId: this.currentRoomId! });
         this.world.addComponent(entity, 'Transform', {
             position: new THREE.Vector3(feetX, floorY, feetZ),
-            rotation: new THREE.Euler(),
+            rotation: mesh.rotation.clone(),
             scale:    new THREE.Vector3(1, 1, 1)
         });
         this.world.addComponent(entity, 'MeshRenderer', { mesh });
@@ -623,8 +910,12 @@ export class RoomManager {
                 tex.needsUpdate = true;
             }
 
+            const frameGroups = this.createAtlasFrameGroups(def.atlasFrames);
+            const initialGroup = frameGroups['idle_down'] ? 'idle_down' : Object.keys(frameGroups)[0] ?? 'idle_down';
+            const initialFrames = frameGroups[initialGroup]?.map(index => def.atlasFrames[index]) ?? def.atlasFrames;
+
             this.world.addComponent(entity, 'AtlasAnimation', {
-                frames:          def.atlasFrames,
+                frames:          initialFrames,
                 imageWidth:      def.imageWidth,
                 imageHeight:     def.imageHeight,
                 currentFrame:    0,
@@ -633,6 +924,17 @@ export class RoomManager {
                 loop:            def.loop    ?? true,
                 autoplay:        def.autoplay ?? true,
             } satisfies AtlasAnimation);
+
+            if (isPlayer) {
+                this.world.addComponent(entity, 'CharacterControl', {
+                    facing: 'down',
+                    action: 'idle',
+                    requestedAction: null,
+                    currentGroup: initialGroup,
+                    frameGroups,
+                    sourceFrames: def.atlasFrames
+                });
+            }
         }
 
         if (isPlayer) {
@@ -646,11 +948,31 @@ export class RoomManager {
         }
 
         if (def.isObstacle) {
-            this.world.addComponent(entity, 'Obstacle', {
-                halfWidth: def.obstacleHalfWidth ?? spriteW / 2,
-                halfDepth: def.obstacleHalfDepth ?? 0.8
-            });
+            const { halfWidth, halfDepth } = this.computeObstacleExtents(def);
+            this.world.addComponent(entity, 'Obstacle', { halfWidth, halfDepth });
         }
+    }
+
+    private createAtlasFrameGroups(frames: Array<{ x: number; y: number; w: number; h: number; filename?: string }>) {
+        const groups: Record<string, Array<{ index: number; order: number }>> = {};
+        for (let index = 0; index < frames.length; index++) {
+            const filename = frames[index].filename ?? '';
+            const match = filename.match(/^(?<action>[a-zA-Z0-9]+)_(?<direction>down|up|left|right)-(\d+)\.png$/i);
+            if (!match || !match.groups) continue;
+            const action = match.groups.action.toLowerCase();
+            const direction = match.groups.direction.toLowerCase();
+            const groupKey = `${action}_${direction}`;
+            const order = Number(match[3] ?? index);
+            groups[groupKey] = groups[groupKey] || [];
+            groups[groupKey].push({ index, order });
+        }
+
+        const sortedGroups: Record<string, number[]> = {};
+        for (const [key, values] of Object.entries(groups)) {
+            sortedGroups[key] = values.sort((a, b) => a.order - b.order).map(v => v.index);
+        }
+
+        return sortedGroups;
     }
 
     /**
@@ -735,6 +1057,10 @@ export class RoomManager {
 
         this.scene.add(mesh);
 
+        if (def.isObstacle && def.position.y <= CHARACTER_HEIGHT) {
+            this.createCollisionWireframe(def, floorY);
+        }
+
         const entity = this.world.createEntity();
         this.world.addComponent(entity, 'RoomMember', { roomId: this.currentRoomId! });
         this.world.addComponent(entity, 'Transform', {
@@ -743,6 +1069,11 @@ export class RoomManager {
             scale: mesh.scale.clone()
         });
         this.world.addComponent(entity, 'MeshRenderer', { mesh });
+
+        if (def.isObstacle) {
+            this.createCollisionWireframe(def, floorY);
+        }
+
         this.world.addComponent(entity, 'DoorMarker', {
             portalId: def.portalId || '',
             targetRoom: def.targetRoomId || '',

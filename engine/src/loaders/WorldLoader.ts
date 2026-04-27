@@ -64,6 +64,7 @@ export class WorldLoader {
                 characterSequenceAutoplay: spawnChar.characterSequenceAutoplay,
                 characterCastShadow: spawnChar.characterCastShadow,
                 characterReceiveShadow: spawnChar.characterReceiveShadow,
+                heightModifiers: r.heightModifiers ?? [],
             } as RoomData;
         });
 
@@ -379,7 +380,10 @@ export class WorldLoader {
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             const atlas = await resp.json();
             console.log(`Successfully parsed player atlas JSON: ${jsonPath}`);
-            room.characterSequenceFrames = atlas.frames.map((f: any) => f.frame as { x: number; y: number; w: number; h: number });
+            room.characterSequenceFrames = atlas.frames.map((f: any) => ({
+                ...(f.frame as { x: number; y: number; w: number; h: number }),
+                filename: f.filename as string
+            }));
             room.characterSequenceImageWidth = atlas.meta.size.w;
             room.characterSequenceImageHeight = atlas.meta.size.h;
             const imgName = atlas.meta.image as string;
@@ -410,7 +414,10 @@ export class WorldLoader {
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             const atlas = await resp.json();
             console.log(`Successfully parsed atlas JSON: ${jsonPath}`);
-            e.atlasFrames = atlas.frames.map((f: any) => f.frame as { x: number; y: number; w: number; h: number });
+            e.atlasFrames = atlas.frames.map((f: any) => ({
+                ...(f.frame as { x: number; y: number; w: number; h: number }),
+                filename: f.filename as string
+            }));
             e.imageWidth = atlas.meta.size.w;
             e.imageHeight = atlas.meta.size.h;
             const imgName = atlas.meta.image as string;

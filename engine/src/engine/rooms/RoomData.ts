@@ -41,7 +41,7 @@ export interface EntitySpawnDef {
     /** For animated_sprite: sprite/atlas source image identifier (same key used in TextureManager) */
     sequenceSource?: string;
     /** Pre-parsed Texture Packer atlas frames (pixel coordinates) — populated during preload */
-    atlasFrames?: Array<{x: number; y: number; w: number; h: number}>;
+    atlasFrames?: Array<{ x: number; y: number; w: number; h: number; filename?: string }>;
     /** Atlas sheet dimensions (populated during preload) */
     imageWidth?: number;
     imageHeight?: number;
@@ -148,4 +148,28 @@ export interface RoomData {
     /** Character shadow settings */
     characterCastShadow?: boolean;
     characterReceiveShadow?: boolean;
+    /** Non-destructive terrain modifiers serialized from the map editor */
+    heightModifiers?: HeightModifier[];
 }
+
+// ── Height modifier types (mirrored from shared_core) ─────────────────────
+
+export interface PointModifier {
+    id: string;
+    type: 'point';
+    position: { x: number; y: number };
+    elevationOffset: number;
+    radius: number;
+    sharpness: number;
+}
+
+export interface LineModifier {
+    id: string;
+    type: 'line';
+    points: Array<{ x: number; y: number }>;
+    elevationOffset: number;
+    width: number;
+    sharpness: number;
+}
+
+export type HeightModifier = PointModifier | LineModifier;

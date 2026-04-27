@@ -14,21 +14,48 @@ import type {
   SpawnEntity,
   DoorEntity,
 } from '../types/entities';
+import type { HeightModifier, PointModifier, LineModifier, RoomData, DoorDef } from '../types/scene';
 
 export type InspectorChangeCallback = (target: any) => void;
 export type InspectorDeleteCallback = (id: string) => void;
 export type InspectorFlightCallback = (entity: CameraEntity, activate: boolean) => void;
+export type ModifierChangeCallback = (modifier: HeightModifier) => void;
+export type ModifierDeleteCallback = (id: string) => void;
 
 export class RightPanel {
   private container: HTMLElement;
   private entity: EditorEntity | null = null;
   private room: any | null = null;
+  private modifier: HeightModifier | null = null;
   private onChange: InspectorChangeCallback;
   private onDelete: InspectorDeleteCallback;
   private onDeleteRoom: InspectorDeleteCallback;
   private onEnterRoom?: (id: string) => void;
   private onFlightMode?: InspectorFlightCallback;
   private allEntities?: () => EditorEntity[];
+
+  /** Fires when a height modifier property changes (from HeightMap mode) */
+  public onModifierChange: ModifierChangeCallback | null = null;
+  /** Fires when the delete button is pressed on a height modifier */
+  public onModifierDelete: ModifierDeleteCallback | null = null;
+
+  /** Fires when the user clicks an entity in the scene outliner */
+  public onEntitySelect: ((entityId: string) => void) | null = null;
+  /** Fires when the user hovers an entity in the scene outliner (null = leave) */
+  public onEntityHover: ((entityId: string | null) => void) | null = null;
+  /** Fires on every input keystroke (live preview, no autosave) */
+  public onLiveChange: ((entity: EditorEntity) => void) | null = null;
+
+  /** Fires when a room is clicked in the world-map outliner */
+  public onWorldRoomSelect: ((roomId: string) => void) | null = null;
+  /** Fires when a door is clicked in the world-map outliner */
+  public onWorldDoorSelect: ((doorId: string) => void) | null = null;
+  /** Fires when a height modifier is clicked in the height-map outliner */
+  public onHeightModifierSelect: ((modifierId: string) => void) | null = null;
+
+  private outlinerEl!: HTMLElement;
+  private inspectorEl!: HTMLElement;
+  private assetData: { textures: string[]; sprites: string[]; audio: string[] } | null = null;
 
   constructor(
     container: HTMLElement,
@@ -46,6 +73,15 @@ export class RightPanel {
     this.onEnterRoom = onEnterRoom;
     this.onFlightMode = onFlightMode;
     this.allEntities = allEntities;
+
+    // ── Create permanent layout zones ──────────────────────────────
+    this.container.innerHTML =
+      '<div class="rp-outliner-zone"></div>' +
+      '<div class="rp-inspector-zone"></div>';
+    this.outlinerEl  = this.container.querySelector('.rp-outliner-zone')  as HTMLElement;
+    this.inspectorEl = this.container.querySelector('.rp-inspector-zone') as HTMLElement;
+
+    this.renderOutliner([]);
     this.renderEmpty();
   }
 
@@ -64,6 +100,7 @@ export class RightPanel {
   public inspectRoom(room: any | null) {
     this.room = room;
     this.entity = null;
+    this.modifier = null;
     if (!room) {
       this.renderEmpty();
       return;
@@ -71,19 +108,35 @@ export class RightPanel {
     this.renderRoom(room);
   }
 
+  /** Show height modifier properties (HeightMap mode) */
+  public inspectModifier(m: HeightModifier | null) {
+    this.modifier = m;
+    this.entity = null;
+    this.room = null;
+    if (!m) {
+      this.renderEmpty();
+      return;
+    }
+    this.renderModifier(m);
+  }
+
   /** Refresh the displayed values without rebuilding the DOM */
   public refresh() {
+    // Skip re-render while the user is actively typing in the inspector
+    if (this.inspectorEl?.contains(document.activeElement)) return;
     if (this.entity) {
       this.renderEntity(this.entity);
     } else if (this.room) {
       this.renderRoom(this.room);
+    } else if (this.modifier) {
+      this.renderModifier(this.modifier);
     }
   }
 
   // ── Render: Empty State ──────────────────────────────────────────
 
   private renderEmpty() {
-    this.container.innerHTML = `
+    this.inspectorEl.innerHTML = `
       <div class="inspector-header">
         <span class="inspector-title">Inspector</span>
       </div>
@@ -145,7 +198,7 @@ export class RightPanel {
       </div>
     `;
 
-    this.container.innerHTML = html;
+    this.inspectorEl.innerHTML = html + this.buildDatalistHtml();
     this.bindEvents(entity);
   }
 
@@ -185,7 +238,7 @@ export class RightPanel {
       </div>
     `;
 
-    this.container.innerHTML = html;
+    this.inspectorEl.innerHTML = html;
     this.bindRoomEvents(room);
   }
 
@@ -243,7 +296,7 @@ export class RightPanel {
 
   private renderSpriteProps(e: SpriteEntity): string {
     return this.section('Sprite', `
-      ${this.propInput('textureSource', 'Texture', e.textureSource)}
+      ${this.propAsset('textureSource', 'Texture', e.textureSource, 'sprites')}
       ${this.propInput('normalMap', 'Normal Map', e.normalMap)}
       ${this.propInput('depthMap', 'Depth Map', e.depthMap)}
       ${this.propSelect('blendMode', 'Blend Mode', e.blendMode, ['normal', 'additive', 'multiply'])}
@@ -256,7 +309,7 @@ export class RightPanel {
   private renderAnimatedSpriteProps(e: EditorEntity): string {
     const a = e as import('../types/entities').AnimatedSpriteEntity;
     return this.section('Animation', `
-      ${this.propInput('textureSource', 'Texture', a.textureSource)}
+      ${this.propAsset('textureSource', 'Texture', a.textureSource, 'sprites')}
       ${this.propNumber('framesCount', 'Frames', a.framesCount, 0)}
       ${this.propNumber('columns', 'Columns', a.columns, 0)}
       ${this.propNumber('rows', 'Rows', a.rows, 0)}
@@ -279,7 +332,7 @@ export class RightPanel {
 
     if (e.materialType === 'textured' || e.materialType === 'sequence') {
       html += this.section('Texture', `
-        ${this.propInput('textureSource', 'Texture Path', e.textureSource || '')}
+        ${this.propAsset('textureSource', 'Texture Path', e.textureSource || '', 'textures')}
         ${this.propNumber('uvTilingX', 'UV Tile X', e.uvTilingX ?? 1, 2)}
         ${this.propNumber('uvTilingY', 'UV Tile Y', e.uvTilingY ?? 1, 2)}
         ${this.propNumber('uvOffsetX', 'UV Offset X', e.uvOffsetX ?? 0, 2)}
@@ -289,7 +342,7 @@ export class RightPanel {
 
     if (e.materialType === 'sequence') {
       html += this.section('Sequence', `
-        ${this.propInput('sequenceSource', 'Sheet Image', e.sequenceSource || '')}
+        ${this.propAsset('sequenceSource', 'Sheet Image', e.sequenceSource || '', 'sprites')}
         ${this.propInput('sequenceJson', 'Anim JSON', e.sequenceJson || '')}
         ${this.propInput('activeAnimation', 'Active State', e.activeAnimation || '')}
         ${this.propNumber('playbackSpeed', 'Speed', e.playbackSpeed ?? 1, 2)}
@@ -349,7 +402,7 @@ export class RightPanel {
 
   private renderSoundProps(e: SoundEntity): string {
     return this.section('Sound', `
-      ${this.propInput('audioSource', 'Audio File', e.audioSource)}
+      ${this.propAsset('audioSource', 'Audio File', e.audioSource, 'audio')}
       ${this.propNumber('volume', 'Volume', e.volume, 2)}
       ${this.propCheckbox('loop', 'Loop', e.loop)}
       ${this.propCheckbox('spatialAudio', 'Spatial', e.spatialAudio)}
@@ -378,8 +431,8 @@ export class RightPanel {
       ${this.propVec3('initialFacing', 'Facing', e.initialFacing)}
     `) + this.section('Character', `
       ${this.propNumber('characterSpeed', 'Move Speed', e.characterSpeed ?? 3.0, 1)}
-      ${this.propInput('characterAsset', 'Asset Source', e.characterAsset || '')}
-      ${this.propInput('characterSequenceSource', 'Sequence Image', e.characterSequenceSource || '')}
+      ${this.propAsset('characterAsset', 'Asset Source', e.characterAsset || '', 'sprites')}
+      ${this.propAsset('characterSequenceSource', 'Sequence Image', e.characterSequenceSource || '', 'sprites')}
       ${this.propInput('characterSequenceJson', 'Sequence JSON', e.characterSequenceJson || '')}
       ${this.propNumber('characterSequenceFps', 'Sequence FPS', e.characterSequenceFps ?? 12, 1)}
       ${this.propCheckbox('characterSequenceLoop', 'Loop', e.characterSequenceLoop ?? true)}
@@ -393,8 +446,7 @@ export class RightPanel {
     `);
   }
 
-  private renderDoorProps(e: DoorEntity): string {
-    let html = this.section('Door', `
+  private renderDoorProps(e: DoorEntity): string {    let html = this.section('Door', `
       ${this.propInput('targetRoomId', 'Target Room ID', e.targetRoomId || '')}
       ${this.propInput('targetSpawnId', 'Target Spawn ID', e.targetSpawnId || '')}
       ${this.propSelect('interactionState', 'State', e.interactionState || 'open', ['open', 'closed', 'locked'])}
@@ -410,7 +462,7 @@ export class RightPanel {
 
     if (e.materialType === 'textured' || e.materialType === 'sequence') {
       html += this.section('Texture', `
-        ${this.propInput('textureSource', 'Texture Path', e.textureSource || '')}
+        ${this.propAsset('textureSource', 'Texture Path', e.textureSource || '', 'textures')}
         ${this.propNumber('uvTilingX', 'UV Tile X', e.uvTilingX ?? 1, 2)}
         ${this.propNumber('uvTilingY', 'UV Tile Y', e.uvTilingY ?? 1, 2)}
         ${this.propNumber('uvOffsetX', 'UV Offset X', e.uvOffsetX ?? 0, 2)}
@@ -420,7 +472,7 @@ export class RightPanel {
 
     if (e.materialType === 'sequence') {
       html += this.section('Sequence', `
-        ${this.propInput('sequenceSource', 'Sheet Image', e.sequenceSource || '')}
+        ${this.propAsset('sequenceSource', 'Sheet Image', e.sequenceSource || '', 'sprites')}
         ${this.propInput('sequenceJson', 'Anim JSON', e.sequenceJson || '')}
         ${this.propInput('activeAnimation', 'Active State', e.activeAnimation || '')}
         ${this.propNumber('playbackSpeed', 'Speed', e.playbackSpeed ?? 1, 2)}
@@ -430,6 +482,95 @@ export class RightPanel {
     }
 
     return html;
+  }
+
+  // ── Render: Height Modifier Inspector ────────────────────────────
+
+  private renderModifier(m: HeightModifier) {
+    const isPoint = m.type === 'point';
+    const typeLabel = isPoint ? 'Elevation Node' : 'Ridge / Trench';
+    const typeColor = isPoint ? '#ff8844' : '#44aaff';
+
+    const sharedFields = `
+      ${this.propNumberMod('elevationOffset', 'Elevation', m.elevationOffset, 2)}
+      ${this.propNumberMod('sharpness', 'Sharpness', m.sharpness, 2)}
+    `;
+
+    const typeFields = isPoint
+      ? this.propNumberMod('radius', 'Radius', (m as PointModifier).radius, 2)
+      : this.propNumberMod('width', 'Width', (m as LineModifier).width, 2);
+
+    this.inspectorEl.innerHTML = `
+      <div class="inspector-header">
+        <span class="inspector-title">Inspector</span>
+      </div>
+      <div class="inspector-body">
+        <div class="inspector-entity-header" style="border-left:3px solid ${typeColor}">
+          <span class="inspector-entity-type" style="color:${typeColor}">${typeLabel.toUpperCase()}</span>
+          <span class="inspector-entity-name">${m.id}</span>
+        </div>
+
+        <div class="inspector-section">
+          <div class="inspector-section-header">
+            <span class="inspector-section-title">Terrain Modifier</span>
+          </div>
+          <div class="inspector-section-content">
+            <div class="prop-row">
+              <span class="prop-label" style="color:var(--text-dim);font-size:10px">
+                ${isPoint
+                  ? 'Elevation: positive=hill, negative=pit'
+                  : 'Elevation: positive=ridge, negative=trench'}
+              </span>
+            </div>
+            ${sharedFields}
+            ${typeFields}
+          </div>
+        </div>
+
+        <div style="padding:8px 12px;display:flex;gap:6px">
+          <button id="modifier-delete" class="inspector-delete-btn" style="flex:1;background:#5a1a1a;color:#ff6666;border:1px solid #ff666644;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:12px">
+            Delete Modifier
+          </button>
+        </div>
+        <div style="padding:2px 12px 8px;font-size:10px;color:var(--text-muted)">
+          ${isPoint
+            ? 'Tip: Adjust Radius to widen the hill/pit. Sharpness controls the slope steepness.'
+            : 'Tip: Double-click to finish drawing. Sharpness controls the edge cliff steepness.'}
+        </div>
+      </div>
+    `;
+
+    this.bindModifierEvents(m);
+  }
+
+  private bindModifierEvents(m: HeightModifier) {
+    document.getElementById('modifier-delete')?.addEventListener('click', () => {
+      this.onModifierDelete?.(m.id);
+    });
+
+    // Bind all number inputs
+    this.container.querySelectorAll('[data-modifier-prop]').forEach((input) => {
+      const key = (input as HTMLElement).dataset.modifierProp!;
+      const handler = () => {
+        const val = parseFloat((input as HTMLInputElement).value) || 0;
+        (m as any)[key] = val;
+        this.onModifierChange?.(m);
+      };
+      input.addEventListener('change', handler);
+      input.addEventListener('input', handler);
+    });
+  }
+
+  /** Number row specifically for modifier props (uses data-modifier-prop instead of data-prop) */
+  private propNumberMod(key: string, label: string, value: number, decimals: number): string {
+    const val = value ?? 0;
+    const step = decimals > 0 ? Math.pow(10, -decimals) : 1;
+    return `
+      <div class="prop-row">
+        <span class="prop-label">${label}</span>
+        <input class="prop-input" data-modifier-prop="${key}" type="number"
+               step="${step}" value="${val.toFixed(decimals)}" />
+      </div>`;
   }
 
   // ── HTML Helpers ─────────────────────────────────────────────────
@@ -551,17 +692,19 @@ export class RightPanel {
       }
     });
 
-    // Property inputs
+    // Property inputs — split live preview (input) from commit (change)
     this.container.querySelectorAll('[data-prop]').forEach((input) => {
       const propPath = (input as HTMLElement).dataset.prop!;
-      const handler = () => {
+      // Live update: update entity data + lightweight mesh preview (no autosave)
+      input.addEventListener('input', () => {
+        this.applyPropChange(entity, propPath, input as HTMLInputElement | HTMLSelectElement);
+        this.onLiveChange?.(entity);
+      });
+      // Commit: full update with autosave
+      input.addEventListener('change', () => {
         this.applyPropChange(entity, propPath, input as HTMLInputElement | HTMLSelectElement);
         this.onChange(entity);
-      };
-      input.addEventListener('change', handler);
-      if ((input as HTMLInputElement).type === 'number') {
-        input.addEventListener('input', handler);
-      }
+      });
     });
   }
 
@@ -634,5 +777,141 @@ export class RightPanel {
       door: '#ff6600',
     };
     return colors[type] || '#888';
+  }
+
+  // ── Scene Outliner ────────────────────────────────────────
+
+  /** Update the persistent entity list at the top of the panel */
+  public updateEntityList(entities: EditorEntity[], selectedId?: string): void {
+    this.renderOutliner(entities, selectedId);
+  }
+
+  /** Show rooms and doors in the outliner (world map mode) */
+  public updateWorldList(rooms: RoomData[], doors: DoorDef[], selectedRoomId?: string): void {
+    const count = rooms.length + doors.length;
+    let listHtml = '';
+
+    for (const r of rooms) {
+      const sel = r.id === selectedRoomId ? ' selected' : '';
+      listHtml += `
+        <li class="rp-outliner-item${sel}" data-world-room-id="${r.id}">
+          <span class="rp-type-dot" style="background:#0088ff"></span>
+          <span class="rp-outliner-name">${this.esc(r.name)}</span>
+          <span class="rp-outliner-id">(${r.id.slice(-8)})</span>
+        </li>`;
+    }
+    for (const d of doors) {
+      listHtml += `
+        <li class="rp-outliner-item" data-world-door-id="${d.id}">
+          <span class="rp-type-dot" style="background:#ff4400"></span>
+          <span class="rp-outliner-name">Door</span>
+          <span class="rp-outliner-id">(${d.id.slice(-8)})</span>
+        </li>`;
+    }
+
+    this.outlinerEl.innerHTML = `
+      <div class="rp-outliner-header">
+        <span class="rp-outliner-title">World Objects</span>
+        <span class="rp-outliner-count">${count}</span>
+      </div>
+      ${count > 0 ? `<ul class="rp-outliner-list">${listHtml}</ul>` : ''}`;
+
+    this.outlinerEl.querySelectorAll('[data-world-room-id]').forEach(item => {
+      const id = (item as HTMLElement).dataset.worldRoomId!;
+      item.addEventListener('click', () => this.onWorldRoomSelect?.(id));
+    });
+    this.outlinerEl.querySelectorAll('[data-world-door-id]').forEach(item => {
+      const id = (item as HTMLElement).dataset.worldDoorId!;
+      item.addEventListener('click', () => this.onWorldDoorSelect?.(id));
+    });
+  }
+
+  /** Show height modifiers in the outliner (height map mode) */
+  public updateHeightList(modifiers: HeightModifier[], selectedId?: string): void {
+    const count = modifiers.length;
+    let listHtml = '';
+
+    for (const m of modifiers) {
+      const sel = m.id === selectedId ? ' selected' : '';
+      const color = m.type === 'line' ? '#44aaff' : '#ff8844';
+      const label = m.type === 'line' ? 'Ridge Line' : 'Height Point';
+      listHtml += `
+        <li class="rp-outliner-item${sel}" data-height-modifier-id="${m.id}">
+          <span class="rp-type-dot" style="background:${color}"></span>
+          <span class="rp-outliner-name">${label}</span>
+          <span class="rp-outliner-id">(${m.id.slice(-8)})</span>
+        </li>`;
+    }
+
+    this.outlinerEl.innerHTML = `
+      <div class="rp-outliner-header">
+        <span class="rp-outliner-title">Height Modifiers</span>
+        <span class="rp-outliner-count">${count}</span>
+      </div>
+      ${count > 0 ? `<ul class="rp-outliner-list">${listHtml}</ul>` : ''}`;
+
+    this.outlinerEl.querySelectorAll('[data-height-modifier-id]').forEach(item => {
+      const id = (item as HTMLElement).dataset.heightModifierId!;
+      item.addEventListener('click', () => this.onHeightModifierSelect?.(id));
+    });
+  }
+
+  private renderOutliner(entities: EditorEntity[], selectedId?: string): void {
+    const count = entities.length;
+    let listHtml = '';
+    for (const e of entities) {
+      const color = this.getTypeColor(e.type);
+      const sel   = e.id === selectedId ? ' selected' : '';
+      listHtml += `
+        <li class="rp-outliner-item${sel}" data-entity-id="${e.id}">
+          <span class="rp-type-dot" style="background:${color}"></span>
+          <span class="rp-outliner-name">${this.esc(e.name)}</span>
+          <span class="rp-outliner-id">(${e.id.slice(-8)})</span>
+        </li>`;
+    }
+
+    this.outlinerEl.innerHTML = `
+      <div class="rp-outliner-header">
+        <span class="rp-outliner-title">Scene Objects</span>
+        <span class="rp-outliner-count">${count}</span>
+      </div>
+      ${count > 0 ? `<ul class="rp-outliner-list">${listHtml}</ul>` : ''}`;
+
+    this.outlinerEl.querySelectorAll('.rp-outliner-item').forEach(item => {
+      const id = (item as HTMLElement).dataset.entityId!;
+      item.addEventListener('click', () => this.onEntitySelect?.(id));
+      item.addEventListener('mouseenter', () => this.onEntityHover?.(id));
+      item.addEventListener('mouseleave', () => this.onEntityHover?.(null));
+    });
+  }
+
+  // ── Asset Datalists ──────────────────────────────────────────
+
+  /** Pass the current asset manifest so property fields can offer autocomplete */
+  public setAssets(data: { textures: string[]; sprites: string[]; audio: string[] }): void {
+    this.assetData = data;
+  }
+
+  private propAsset(
+    key: string, label: string, value: string,
+    assetType: 'textures' | 'sprites' | 'audio'
+  ): string {
+    return `
+      <div class="prop-row">
+        <span class="prop-label">${label}</span>
+        <input class="prop-input" data-prop="${key}" list="rp-dl-${assetType}"
+               value="${this.esc(value)}" autocomplete="off" />
+      </div>`;
+  }
+
+  private buildDatalistHtml(): string {
+    if (!this.assetData) return '';
+    const opts = (files: string[], prefix: string, exts: RegExp) =>
+      files.filter(f => exts.test(f)).map(f => `<option value="${prefix}${f}">`).join('');
+    return [
+      `<datalist id="rp-dl-textures">${opts(this.assetData.textures ?? [], 'textures/', /\.(jpg|jpeg|png|webp)$/i)}</datalist>`,
+      `<datalist id="rp-dl-sprites">${opts(this.assetData.sprites ?? [], 'sprites/', /\.(png|jpg|jpeg|webp)$/i)}</datalist>`,
+      `<datalist id="rp-dl-audio">${opts(this.assetData.audio ?? [], 'audio/', /\.(mp3|ogg|wav|flac)$/i)}</datalist>`,
+    ].join('');
   }
 }

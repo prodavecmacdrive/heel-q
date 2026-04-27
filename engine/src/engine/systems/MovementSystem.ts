@@ -1,6 +1,7 @@
 import { System } from '../ecs/System';
 import { World } from '../ecs/World';
 import { Player, Transform, SpriteAnimation } from '../ecs/Component';
+import type { RoomManager } from '../rooms/RoomManager';
 
 /**
  * MovementSystem — follows multi-node A* paths on the XZ floor plane.
@@ -8,11 +9,15 @@ import { Player, Transform, SpriteAnimation } from '../ecs/Component';
  * The player's path[] is a queue of waypoints.  The system walks toward
  * the first waypoint; when it arrives, it shifts to the next.  When the
  * queue is empty, movement stops and animation flips to idle.
- * Y is permanently locked to Player.floorY (feet on floor).
+ * Y is computed each frame as terrainHeight(playerX, playerZ) so the player
+ * automatically follows sloped or elevated terrain surfaces.
  */
 export class MovementSystem extends System {
-    constructor(world: World) {
+    private roomManager: RoomManager;
+
+    constructor(world: World, roomManager: RoomManager, _camera?: THREE.Camera) {
         super(world);
+        this.roomManager = roomManager;
     }
 
     update(dt: number) {
@@ -45,8 +50,10 @@ export class MovementSystem extends System {
                     player.isMoving = true;
                 }
 
-                // Lock Y to floor
-                transform.position.y = player.floorY;
+                // Lock Y to terrain surface at current XZ
+                transform.position.y = this.roomManager.getFloorY(
+                    transform.position.x, transform.position.z
+                ) + player.floorY;  // player.floorY is the offset above terrain (normally 0)
             } else {
                 player.isMoving = false;
             }

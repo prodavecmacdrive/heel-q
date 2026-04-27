@@ -9,6 +9,55 @@ export interface Vec2 {
   y: number;
 }
 
+// ── Height Modifier Types ────────────────────────────────────────────────────
+
+/**
+ * Point-based height modifier.
+ * Raises or lowers the floor within a spherical radius.
+ * Positive elevationOffset = hill/mound, negative = pit/crater.
+ */
+export interface PointModifier {
+  id: string;
+  type: 'point';
+  /** XZ world position of the modifier center */
+  position: Vec2;
+  /** Y displacement in world units. Positive = up, negative = down. */
+  elevationOffset: number;
+  /** Influence radius in world units */
+  radius: number;
+  /**
+   * Falloff curve power.
+   * 0.5 = very smooth bell, 1 = linear dropoff, 4+ = steep cliff edge.
+   */
+  sharpness: number;
+}
+
+/**
+ * Line-based height modifier.
+ * Creates a continuous ridge or trench along a polyline path.
+ * Positive elevationOffset = ridge, negative = trench/channel.
+ */
+export interface LineModifier {
+  id: string;
+  type: 'line';
+  /** 2+ XZ world positions defining the ridge/trench path */
+  points: Vec2[];
+  /** Y displacement in world units. Positive = ridge, negative = trench. */
+  elevationOffset: number;
+  /** Influence half-width in world units on each side of the line */
+  width: number;
+  /**
+   * Falloff curve power.
+   * 0.5 = very smooth, 1 = linear dropoff, 4+ = sharp cliff edge.
+   */
+  sharpness: number;
+}
+
+/** Discriminated union of all terrain modifier types */
+export type HeightModifier = PointModifier | LineModifier;
+
+// ── Room / World types ───────────────────────────────────────────────────────
+
 /** Door connecting rooms, placed on walls */
 export interface DoorDef {
   id: string;
@@ -38,9 +87,13 @@ export interface RoomData {
 
   /** Ambient lighting */
   ambientColor: string;
-  
-  /** Height map grid data (flat if not altered) */
-  heightMap: number[]; // e.g. a grid inside bounding box
+
+  /**
+   * Non-destructive terrain modifiers.
+   * Serialized as parametric data; the engine reconstructs the displaced floor
+   * mathematically from these records rather than storing heavy mesh data.
+   */
+  heightModifiers: HeightModifier[];
 
   /** Per-vertex rounding radii for the outline (same length as outline). 0 = sharp corner. */
   cornerRadii?: number[];
@@ -80,7 +133,7 @@ export function createDefaultRoom(id: string): RoomData {
     spawnPoints: [],
     walkPadding: 1.0,
     ambientColor: '#2b5a5b',
-    heightMap: [],
+    heightModifiers: [],
     cornerRadii: [],
   };
 }

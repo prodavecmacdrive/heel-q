@@ -346,7 +346,7 @@ export class EntityFactory {
 
   // ── Spawn Helper ───────────────────────────────────────────────────
 
-  private createSpawnHelper(_entity: SpawnEntity): THREE.Object3D {
+  private createSpawnHelper(entity: SpawnEntity): THREE.Object3D {
     const group = new THREE.Group();
 
     // Base circle
@@ -369,6 +369,13 @@ export class EntityFactory {
     const arrow = new THREE.Mesh(arrowGeo, arrowMat);
     arrow.position.y = 0.5;
     group.add(arrow);
+
+    const castShadow = entity.characterCastShadow ?? false;
+    const receiveShadow = entity.characterReceiveShadow ?? false;
+    ring.castShadow = castShadow;
+    ring.receiveShadow = receiveShadow;
+    arrow.castShadow = castShadow;
+    arrow.receiveShadow = receiveShadow;
 
     // Vertical line
     const lineGeo = new THREE.BufferGeometry().setFromPoints([

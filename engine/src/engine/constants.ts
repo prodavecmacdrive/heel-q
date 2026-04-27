@@ -8,6 +8,9 @@ export const DEPTH_SORT_SCALE = 1000;
 // Discrete scale steps for fake 2.5D perspective scaling
 export const SCALE_STEPS = [1.0, 0.875, 0.75, 0.625, 0.5, 0.375, 0.25, 0.125];
 
+/** Height in world units that the player occupies (for under-pass clearance) */
+export const CHARACTER_HEIGHT = 2.0;
+
 export const COLORS = {
     BACKGROUND: '#000000',
     FLOOR: '#5C3A1E',

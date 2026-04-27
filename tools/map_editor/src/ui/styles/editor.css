@@ -992,3 +992,214 @@ html, body {
   border-color: var(--accent-cyan);
   box-shadow: var(--glow-cyan);
 }
+
+/* ── Scene Outliner ─────────────────────────────────────────────────── */
+.rp-outliner-zone {
+  border-bottom: 1px solid var(--border-default);
+  flex-shrink: 0;
+}
+
+.rp-outliner-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 12px;
+  background: var(--bg-subtle, #0d1117);
+  border-bottom: 1px solid var(--border-muted, #21262d);
+  user-select: none;
+}
+
+.rp-outliner-title {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-secondary);
+}
+
+.rp-outliner-count {
+  font-size: 10px;
+  color: var(--text-muted);
+  background: var(--bg-raised);
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-family: var(--font-mono);
+}
+
+.rp-outliner-list {
+  list-style: none;
+  margin: 0;
+  padding: 2px 0;
+  max-height: 130px;
+  overflow-y: auto;
+}
+
+.rp-outliner-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background 80ms;
+  user-select: none;
+}
+
+.rp-outliner-item:hover {
+  background: var(--accent-blue-10, rgba(88,166,255,0.07));
+  color: var(--text-primary);
+}
+
+.rp-outliner-item.selected {
+  background: var(--accent-blue-20, rgba(88,166,255,0.15));
+  color: var(--accent-blue);
+}
+
+.rp-type-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.rp-outliner-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rp-outliner-id {
+  font-size: 9px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+/* Inspector zone fills the rest of the right panel */
+.rp-inspector-zone {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* Ensure the inspector body inside the zone still scrolls */
+.rp-inspector-zone .inspector-body {
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   Camera Preview Panel
+   Overlays the bottom-right corner of #viewport-container.
+   The transparent body lets the Three.js canvas show through.
+   ══════════════════════════════════════════════════════════════════════ */
+
+.cam-preview-panel {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  width: 320px;
+  border: 1px solid var(--accent-blue);
+  border-radius: 6px;
+  overflow: hidden;
+  z-index: 50;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.6), var(--glow-blue);
+  /* pointer-events on panel so header stays interactive */
+  pointer-events: auto;
+}
+
+.cam-preview-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  height: 34px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border-default);
+  user-select: none;
+}
+
+.cam-preview-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  flex: 1;
+  white-space: nowrap;
+}
+
+.cam-preview-icon {
+  width: 14px;
+  height: 14px;
+  color: var(--accent-blue);
+  flex-shrink: 0;
+}
+
+.cam-preview-select {
+  appearance: none;
+  background: var(--bg-input);
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 11px;
+  padding: 3px 20px 3px 7px;
+  height: 24px;
+  min-width: 0;
+  max-width: 140px;
+  cursor: pointer;
+  outline: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%238b949e' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 6px center;
+  transition: border-color 120ms;
+}
+
+.cam-preview-select:focus {
+  border-color: var(--accent-blue);
+}
+
+.cam-preview-select option {
+  background: var(--bg-overlay);
+  color: var(--text-primary);
+}
+
+/* Body: transparent so WebGL scissor rect shows through */
+.cam-preview-body {
+  position: relative;
+  width: 320px;
+  height: 180px;
+  background: transparent;
+  pointer-events: none;
+}
+
+/* No-signal overlay shown when no camera entity is available */
+.cam-preview-nosignal {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: rgba(10, 14, 18, 0.82);
+  color: var(--text-muted);
+  font-size: 12px;
+  pointer-events: none;
+}
+
+.cam-preview-nosignal svg {
+  opacity: 0.4;
+}

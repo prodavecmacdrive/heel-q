@@ -16,6 +16,7 @@ export class ViewportManager {
   private container: HTMLElement;
   private animationId: number = 0;
   private onRenderCallbacks: Array<() => void> = [];
+  private onPostRenderCallbacks: Array<() => void> = [];
   private resizeObserver: ResizeObserver;
 
   constructor(canvas: HTMLCanvasElement, container: HTMLElement) {
@@ -89,6 +90,7 @@ export class ViewportManager {
   }
 
   public onRender(cb: () => void) { this.onRenderCallbacks.push(cb); }
+  public onPostRender(cb: () => void) { this.onPostRenderCallbacks.push(cb); }
 
   public start() {
     const loop = () => {
@@ -96,11 +98,13 @@ export class ViewportManager {
       this.controls.update();
       for (const cb of this.onRenderCallbacks) cb();
       this.renderer.render(this.scene, this.activeCamera);
+      for (const cb of this.onPostRenderCallbacks) cb();
     };
+
     loop();
   }
 
-  public stop() { cancelAnimationFrame(this.animationId); }
+  public stop(){ cancelAnimationFrame(this.animationId); }
 
   public screenToFloor(clientX: number, clientY: number): THREE.Vector3 | null {
     const ndc = this.getNDC(clientX, clientY);

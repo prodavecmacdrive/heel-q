@@ -20,6 +20,7 @@ export class WorldMapController {
   private world: WorldProject;
   private onRoomSelect: (roomId: string) => void;
   private onDoorCreated: ((doorId: string, midX: number, midZ: number, room1Id: string, room2Id: string | null, dirX: number, dirZ: number, halfLen: number) => void) | null = null;
+  private onHistoryNeeded: (() => void) | null = null;
 
   private isDrawing = false;
   private currentTool: string = 'select';
@@ -64,6 +65,10 @@ export class WorldMapController {
     this.onDoorCreated = cb;
   }
 
+  public setOnHistoryNeeded(cb: () => void) {
+    this.onHistoryNeeded = cb;
+  }
+
   public activate() {
     this.sceneGroup.visible = true;
     this.viewport.setOrthographicMode(true);
@@ -106,6 +111,7 @@ export class WorldMapController {
       const pos = this.viewport.screenToFloor(e.clientX, e.clientY);
       
       if (vHit !== -1) {
+        this.onHistoryNeeded?.();
         this.draggingVertexIndex = vHit;
         this.dragLastPos = pos;
         this.draggingRoomId = this.world.activeRoomId ?? null;
@@ -115,6 +121,7 @@ export class WorldMapController {
       const hit = this.raycastRooms(e.clientX, e.clientY);
       if (hit) {
         if (pos) {
+          this.onHistoryNeeded?.();
           this.draggingRoomId = hit;
           this.dragLastPos = pos;
           this.didDrag = false;
@@ -128,6 +135,7 @@ export class WorldMapController {
       if (vHit !== -1) {
         const room = this.world.rooms.find(r => r.id === this.world.activeRoomId);
         if (room) {
+          this.onHistoryNeeded?.();
           this.roundingVertexIndex = vHit;
           this.roundingVertexPos = { x: room.outline[vHit].x, y: room.outline[vHit].y };
           this.roundingDidDrag = false;
@@ -302,6 +310,7 @@ export class WorldMapController {
   // ── Logic ──
 
   private finishDrawingRoom() {
+    this.onHistoryNeeded?.();
     const roomId = 'room_' + Date.now();
     const room = createDefaultRoom(roomId);
     
@@ -318,6 +327,7 @@ export class WorldMapController {
   private finishDrawingDoor() {
     if (this.points.length < 2) return;
 
+    this.onHistoryNeeded?.();
     // Compute wall direction from the two drawn endpoints
     const rawDx = this.points[1].x - this.points[0].x;
     const rawDz = this.points[1].z - this.points[0].z;

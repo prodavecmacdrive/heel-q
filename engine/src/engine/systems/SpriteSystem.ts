@@ -59,9 +59,10 @@ export class SpriteSystem extends System {
 
             renderer.mesh.scale.set(scaledW, scaledH, 1);
 
-            // 3. Feet-first offset: shift mesh up by half the scaled height so the
-            //    bottom edge sits at transform.position.y (the floor).
-            (renderer.mesh as THREE.Mesh).position.y = transform.position.y + scaledH / 2;
+            // 3. Feet-first offset: shift mesh so the bottom edge sits slightly
+            //    below the floor, giving the sprite a more grounded look.
+            const floorSink = 0.7;
+            (renderer.mesh as THREE.Mesh).position.y = transform.position.y + scaledH / 2 - floorSink;
         }
     }
 }

@@ -21,8 +21,8 @@ export class GizmoController {
       viewport.renderer.domElement
     );
 
-    // Style the gizmo
-    this.transformControls.setSize(0.75);
+    // Style the gizmo — larger handles are easier to grab in perspective 3D
+    this.transformControls.setSize(1.2);
 
     // Disable orbit controls while dragging gizmo
     this.transformControls.addEventListener('dragging-changed', (event) => {

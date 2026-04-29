@@ -67,6 +67,10 @@ export class World {
         this.systems.push(system);
     }
 
+    getSystem<T extends System>(constructor: new (...args: any[]) => T): T | undefined {
+        return this.systems.find(s => s instanceof constructor) as T;
+    }
+
     update(dt: number) {
         // Run all systems
         for (const system of this.systems) {

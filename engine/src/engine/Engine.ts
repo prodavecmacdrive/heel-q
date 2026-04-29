@@ -87,7 +87,7 @@ export class Engine {
         this.world.addSystem(new DepthSortSystem(this.world));
         this.world.addSystem(new PixelSnapSystem(this.world));
         this.world.addSystem(
-            new CameraSystem(this.world, this.camera, this.roomManager)
+            new CameraSystem(this.world, this.camera, this.roomManager, this.renderer)
         );
 
         // 4. Render (last)

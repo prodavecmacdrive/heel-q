@@ -21,6 +21,9 @@ export class GizmoController {
       viewport.renderer.domElement
     );
 
+    // Move axes with the object by default.
+    this.transformControls.setSpace('local');
+
     // Style the gizmo — larger handles are easier to grab in perspective 3D
     this.transformControls.setSize(1.2);
 

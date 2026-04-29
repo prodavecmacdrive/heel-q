@@ -2,6 +2,7 @@ import { System } from '../ecs/System';
 import { World } from '../ecs/World';
 import { Player, Transform, SpriteAnimation } from '../ecs/Component';
 import type { RoomManager } from '../rooms/RoomManager';
+import * as THREE from 'three';
 
 /**
  * MovementSystem — follows multi-node A* paths on the XZ floor plane.

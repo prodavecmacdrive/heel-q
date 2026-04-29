@@ -17,9 +17,13 @@ import { LeftPanel, type ToolType } from './ui/LeftPanel';
 import { BottomPanel, type DragData } from './ui/BottomPanel';
 import { RightPanel } from './ui/RightPanel';
 import { CameraPreviewPanel } from './ui/CameraPreviewPanel';
+import { ContextMenu, type ContextMenuOption } from './ui/ContextMenu';
 
 import { SceneSerializer } from './export/SceneSerializer';
 import { HistoryManager } from './editor/HistoryManager';
+
+const GRID_SNAP = 0.5;
+const ROTATION_SNAP_DEGREES = 15;
 
 import type { EditorEntity, EntityType, PrimitiveEntity, CameraEntity, DoorEntity, SpawnEntity } from './types/entities';
 import { createDefaultEntity } from './types/entities';
@@ -30,6 +34,9 @@ export class EditorApp {
   // ── State ──
   private world: WorldProject;
   private activeRoom: RoomData | null = null;
+  private focusedObject: THREE.Object3D | null = null;
+  private isolatedObjectId: string | null = null;
+  private gizmoDragging = false;
 
   // ── Flight mode state ──
   private flightMode = false;
@@ -42,6 +49,7 @@ export class EditorApp {
   private _flightMouseHandler: ((e: MouseEvent) => void) | null = null;
   
   private entityMap: Map<string, EditorEntity> = new Map();
+  private clipboard: EditorEntity | null = null;
   private meshMap: Map<string, THREE.Object3D> = new Map();
   // Maps door entity ID → world door segment ID (for position syncing)
   private doorEntityToWorldDoor: Map<string, string> = new Map();
@@ -62,6 +70,7 @@ export class EditorApp {
   private bottomPanel!: BottomPanel;
   private rightPanel!: RightPanel;
   private cameraPreview!: CameraPreviewPanel;
+  private contextMenu: ContextMenu = new ContextMenu();
 
   // ── Serialization ──
   private serializer: SceneSerializer = new SceneSerializer();
@@ -120,6 +129,22 @@ export class EditorApp {
       (tool) => this.handleToolChange(tool)
     );
 
+    this.gizmo.transformControls.addEventListener('dragging-changed', (event) => {
+      this.gizmoDragging = (event as any).value === true;
+    });
+
+    // Global right-click handler for context menu
+    container.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      this.showContextMenu(e.clientX, e.clientY);
+    });
+
+    this.viewport.onRender(() => {
+      if (this.focusedObject && !this.gizmoDragging) {
+        this.viewport.controls.target.lerp(this.focusedObject.position, 0.1);
+      }
+    });
+
     this.bottomPanel = new BottomPanel(
       document.getElementById('bottom-panel')!
     );
@@ -132,11 +157,9 @@ export class EditorApp {
           this.captureHistory();
           this.refreshEntityMesh(target as EditorEntity);
           this.worldMapCtrl.rebuildRooms();
-          this.autoSave();
         } else {
           // Room property changed
           this.worldMapCtrl.rebuildRooms();
-          this.autoSave();
         }
       },
       (entityId) => this.removeEntity(entityId),
@@ -149,7 +172,6 @@ export class EditorApp {
     // Wire height-modifier inspector callbacks
     this.rightPanel.onModifierChange = (m) => {
       this.heightMapCtrl.updateModifier(m);
-      this.autoSave();
     };
     this.rightPanel.onModifierDelete = (_id) => {
       this.heightMapCtrl.deleteSelected();
@@ -169,35 +191,17 @@ export class EditorApp {
       this.selectRoom(roomId);
     };
     // Height-map outliner: clicking a modifier selects it in HeightMapController
-    this.rightPanel.onHeightModifierSelect = (modifierId) => {
-      this.heightMapCtrl.selectModifierById(modifierId);
-    };
-    // Live change: just update the mesh transform, no autosave
-    this.rightPanel.onLiveChange = (entity) => {
-      this.handleEntityChange(entity);
+    this.heightMapCtrl.onModifiersChanged = () => {
+      // Re-apply terrain height to all room entities and floor mesh
+      this.refreshEntityTerrainY();
+      this.rebuildFloorAndWalls();
+      if (this.currentMode === 'height') this.refreshOutliner();
     };
 
     // Capture history when a gizmo drag begins (before the transform changes)
     this.gizmo.transformControls.addEventListener('mouseDown', () => {
       this.captureHistory();
     });
-    // After drag ends, autosave the result
-    this.gizmo.transformControls.addEventListener('mouseUp', () => {
-      this.autoSave();
-    });
-
-    // ── HeightMapController callbacks ──
-    this.heightMapCtrl.onModifierSelected = (m) => {
-      this.rightPanel.inspectModifier(m);
-      if (this.currentMode === 'height') this.refreshOutliner();
-    };
-    this.heightMapCtrl.onModifiersChanged = () => {
-      // Re-apply terrain height to all room entities and floor mesh
-      this.refreshEntityTerrainY();
-      this.rebuildFloorAndWalls();
-      if (this.currentMode === 'height') this.refreshOutliner();
-      this.autoSave();
-    };
 
     // ── Gizmo change ──
     this.gizmo.setOnChange((obj) => {
@@ -301,7 +305,7 @@ export class EditorApp {
             if (tool === 'translate' || tool === 'rotate' || tool === 'scale') {
               this.gizmo.setMode(tool as GizmoMode);
             }
-            this.gizmo.transformControls.setSpace('world');
+            this.setGizmoSpaceForTool(this.leftPanel.getTool(), entity.type);
           }
         } else {
           this.gizmo.detach();
@@ -452,6 +456,18 @@ export class EditorApp {
     }
 
     this.rebuildFloorAndWalls();
+  }
+
+  /** Update all entity mesh Y-positions to reflect current terrain heights */
+  private refreshEntityTerrainY() {
+    if (!this.activeRoom) return;
+    for (const entity of this.activeRoom.entities) {
+      const mesh = this.meshMap.get(entity.id);
+      if (!mesh) continue;
+      const t = entity.transform;
+      const terrainY = this.heightMapCtrl.getHeightAt(t.position.x, t.position.z);
+      mesh.position.y = t.position.y + terrainY;
+    }
   }
 
   private rebuildFloorAndWalls() {
@@ -693,8 +709,27 @@ export class EditorApp {
     if (tool === 'select') this.gizmo.detach();
     if (['translate', 'rotate', 'scale'].includes(tool)) {
       this.gizmo.setMode(tool as GizmoMode);
-      if (this.selection.selectedObject) this.gizmo.attach(this.selection.selectedObject);
+      if (this.selection.selectedObject) {
+        this.gizmo.attach(this.selection.selectedObject);
+        const selectedId = this.selection.selectedObject.userData?.entityId;
+        const selectedEntity = selectedId ? this.entityMap.get(selectedId) : null;
+        this.setGizmoSpaceForTool(tool, selectedEntity?.type);
+      }
     }
+  }
+
+  private setGizmoSpaceForTool(tool: string, entityType?: string) {
+    if (entityType === 'door') {
+      this.gizmo.transformControls.setSpace('world');
+      return;
+    }
+
+    if (tool === 'rotate' || tool === 'scale') {
+      this.gizmo.transformControls.setSpace('local');
+      return;
+    }
+
+    this.gizmo.transformControls.setSpace('world');
   }
 
   private handleEntityChange(entity: EditorEntity) {
@@ -797,20 +832,31 @@ export class EditorApp {
           this.worldMapCtrl.handleKeyDown(e);
       }
 
-      if (e.ctrlKey && e.shiftKey && (e.key === 'Z' || e.key === 'z')) {
+      // Use e.code for layout-independent shortcuts (physical key position)
+      if (e.ctrlKey && e.shiftKey && e.code === 'KeyZ') {
         e.preventDefault(); this.redo(); return;
       }
-      if (e.ctrlKey && e.key === 'z') { e.preventDefault(); this.undo(); return; }
+      if (e.ctrlKey && e.code === 'KeyZ') { e.preventDefault(); this.undo(); return; }
 
-      if (e.key === 'Delete' || e.key === 'Backspace') {
+      if (e.ctrlKey && e.code === 'KeyC') { e.preventDefault(); this.copySelected(); return; }
+      if (e.ctrlKey && e.code === 'KeyV') { e.preventDefault(); this.paste(); return; }
+
+      if (e.code === 'Delete' || e.code === 'Backspace') {
         const selected = this.selection.selectedObject;
         if (selected?.userData?.entityId) this.removeEntity(selected.userData.entityId);
       }
-      if (e.ctrlKey && e.key === 's') { e.preventDefault(); this.saveWorld(); }
-      if (e.ctrlKey && e.key === 'e') { e.preventDefault(); this.exportWorld(); }
-      if (e.ctrlKey && e.key === 'n') { e.preventDefault(); this.newWorld(); }
-      if (e.ctrlKey && e.key === 'd') { e.preventDefault(); this.duplicateSelected(); }
-      if (e.key === 'f' || e.key === 'F') this.focusOnSelection();
+      if (e.ctrlKey && e.code === 'KeyS') { e.preventDefault(); this.saveWorld(); }
+      if (e.ctrlKey && e.code === 'KeyE') { e.preventDefault(); this.exportWorld(); }
+      if (e.ctrlKey && e.code === 'KeyN') { e.preventDefault(); this.newWorld(); }
+      if (e.ctrlKey && e.code === 'KeyD') { e.preventDefault(); this.duplicateSelected(); }
+      if (e.code === 'KeyF') this.focusOnSelection();
+      if (e.code === 'Escape') {
+        this.focusedObject = null;
+        this.isolatedObjectId = null;
+        this.selection.isLocked = false;
+        this.restoreAllObjectsVisibility();
+        this.selection.select(null);
+      }
     });
   }
 
@@ -823,36 +869,14 @@ export class EditorApp {
     this.toast('New world created', 'info');
   }
 
-  private _autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
-
-  /** Update all entity mesh Y-positions to reflect current terrain heights */
-  private refreshEntityTerrainY() {
-    if (!this.activeRoom) return;
-    for (const entity of this.activeRoom.entities) {
-      const mesh = this.meshMap.get(entity.id);
-      if (!mesh) continue;
-      const t = entity.transform;
-      const terrainY = this.heightMapCtrl.getHeightAt(t.position.x, t.position.z);
-      mesh.position.y = t.position.y + terrainY;
-    }
-  }
-
-  private autoSave() {
-    if (this._autoSaveTimer !== null) clearTimeout(this._autoSaveTimer);
-    this._autoSaveTimer = setTimeout(() => {
-      this._autoSaveTimer = null;
-      this.saveWorld();
-    }, 1200);
-  }
-
   private async saveWorld() {
     this.syncSpawnPoints();
     const result = await this.serializer.saveToStorage(this.world);
     this.menuBar.updateSaveStatus(result.localSaved, result.engineSynced, result.timestamp, result.error);
     if (result.engineSynced) {
-      this.toast('World saved', 'success');
-    } else {
-      this.toast('Saved to localStorage only — engine sync failed', 'error');
+      this.toast('World saved & synced', 'success');
+    } else if (result.localSaved) {
+      this.toast('World saved locally (sync failed)', 'info');
     }
   }
 
@@ -910,10 +934,256 @@ export class EditorApp {
     this.selection.select(obj);
   }
 
+  private copySelected() {
+    const selected = this.selection.selectedObject;
+    if (!selected?.userData?.entityId) return;
+
+    const sourceEntity = this.entityMap.get(selected.userData.entityId);
+    if (!sourceEntity) return;
+
+    // Store a deep clone in internal clipboard
+    this.clipboard = JSON.parse(JSON.stringify(sourceEntity));
+    this.toast(`Copied ${sourceEntity.name}`, 'info');
+  }
+
+  private paste() {
+    if (!this.activeRoom || !this.clipboard) return;
+
+    this.captureHistory();
+
+    // Use factory to get a fresh ID and common defaults if needed, then overlay clipboard data
+    const clone = createDefaultEntity(this.clipboard.type, `${this.clipboard.name} (copy)`);
+    Object.assign(clone, { ...JSON.parse(JSON.stringify(this.clipboard)), id: clone.id });
+    
+    // Offset slightly so it's not perfectly overlapping
+    clone.transform.position.x += 1;
+    clone.transform.position.z += 1;
+
+    const obj = this.addEntity(clone);
+    this.selection.select(obj);
+    this.toast(`Pasted ${clone.name}`, 'info');
+  }
+
   private focusOnSelection() {
     const s = this.selection.selectedObject;
-    if (s) this.viewport.controls.target.copy(s.position);
-    else this.viewport.controls.target.set(0, 0, 0);
+    if (s) {
+      this.focusedObject = s;
+      this.selection.isLocked = true;
+      this.toast('Selection locked & Camera focused (Escape to release)', 'info');
+    } else {
+      this.focusedObject = null;
+      this.selection.isLocked = false;
+      this.viewport.controls.target.set(0, 0, 0);
+    }
+  }
+
+  private alignSelectionToGrid() {
+    const selected = this.selection.selectedObject;
+    if (!selected?.userData?.entityId) return;
+    const entity = this.entityMap.get(selected.userData.entityId);
+    if (!entity) return;
+
+    this.captureHistory();
+    entity.transform.position.x = parseFloat((Math.round(entity.transform.position.x / GRID_SNAP) * GRID_SNAP).toFixed(3));
+    entity.transform.position.z = parseFloat((Math.round(entity.transform.position.z / GRID_SNAP) * GRID_SNAP).toFixed(3));
+    entity.transform.rotation.y = parseFloat((Math.round(entity.transform.rotation.y / ROTATION_SNAP_DEGREES) * ROTATION_SNAP_DEGREES).toFixed(2));
+
+    this.refreshEntityMesh(entity);
+    this.worldMapCtrl.rebuildRooms();
+    this.refreshOutliner();
+    this.toast('Aligned to grid', 'success');
+  }
+
+  private toggleHideOthers() {
+    const selected = this.selection.selectedObject;
+    if (!selected?.userData?.entityId) return;
+
+    if (this.isolatedObjectId === selected.userData.entityId) {
+      this.isolatedObjectId = null;
+      this.restoreAllObjectsVisibility();
+      this.toast('Showing all objects', 'info');
+      return;
+    }
+
+    this.isolatedObjectId = selected.userData.entityId;
+    for (const [id, mesh] of this.meshMap) {
+      mesh.visible = id === this.isolatedObjectId ? true : false;
+    }
+    this.toast('Hiding other objects', 'info');
+  }
+
+  private restoreAllObjectsVisibility() {
+    if (!this.activeRoom) return;
+    for (const entity of this.activeRoom.entities) {
+      const mesh = this.meshMap.get(entity.id);
+      if (!mesh) continue;
+      mesh.visible = entity.visible;
+    }
+  }
+
+  private dropSelectionToFloor() {
+    const selected = this.selection.selectedObject;
+    if (!selected?.userData?.entityId) return;
+    const entity = this.entityMap.get(selected.userData.entityId);
+    if (!entity) return;
+
+    this.captureHistory();
+    entity.transform.position.y = 0;
+    this.refreshEntityMesh(entity);
+    this.toast('Dropped to floor', 'success');
+  }
+
+  private selectPartnerDoor() {
+    const selected = this.selection.selectedObject;
+    if (!selected?.userData?.entityId) return;
+    const entity = this.entityMap.get(selected.userData.entityId);
+    if (!entity || entity.type !== 'door') return;
+
+    const door = entity as DoorEntity;
+    if (!door.worldDoorId) {
+      this.toast('Door has no partner link', 'error');
+      return;
+    }
+
+    let partner: EditorEntity | null = null;
+    let partnerRoom: RoomData | null = null;
+    for (const room of this.world.rooms) {
+      for (const roomEntity of room.entities) {
+        if (roomEntity.type === 'door' && (roomEntity as DoorEntity).worldDoorId === door.worldDoorId && roomEntity.id !== door.id) {
+          partner = roomEntity;
+          partnerRoom = room;
+          break;
+        }
+      }
+      if (partner) break;
+    }
+
+    if (!partner || !partnerRoom) {
+      this.toast('No door partner found', 'error');
+      return;
+    }
+
+    if (partnerRoom !== this.activeRoom) {
+      this.selectRoom(partnerRoom.id);
+    }
+
+    const mesh = this.meshMap.get(partner.id);
+    if (mesh) this.selection.select(mesh);
+    this.toast(`Selected partner door in ${partnerRoom.name || partnerRoom.id}`, 'success');
+  }
+
+  private groupSelection() {
+    this.toast('Group/Ungroup requires multi-selection support', 'info');
+  }
+
+  private showContextMenu(x: number, y: number) {
+    const selected = this.selection.selectedObject;
+    const hasSelection = !!selected;
+    const selectedEntity = hasSelection ? this.entityMap.get(selected!.userData.entityId) : null;
+    const isIsolated = selected?.userData?.entityId && this.isolatedObjectId === selected.userData.entityId;
+
+    const options: ContextMenuOption[] = [
+      {
+        id: 'focus',
+        label: 'Focus Camera',
+        keyboardShortcut: 'F',
+        disabled: !hasSelection,
+        action: () => this.focusOnSelection()
+      },
+      {
+        id: 'release-focus',
+        label: 'Release Focus',
+        keyboardShortcut: 'Esc',
+        disabled: !this.focusedObject,
+        action: () => {
+          this.focusedObject = null;
+          this.selection.isLocked = false;
+          this.restoreAllObjectsVisibility();
+        }
+      },
+      {
+        id: 'align',
+        label: 'Align to Grid',
+        keyboardShortcut: 'G',
+        disabled: !hasSelection,
+        action: () => this.alignSelectionToGrid()
+      },
+      {
+        id: 'hide-others',
+        label: isIsolated ? 'Show Others' : 'Hide Others',
+        keyboardShortcut: 'H',
+        disabled: !hasSelection,
+        action: () => this.toggleHideOthers()
+      },
+      {
+        id: 'drop-to-floor',
+        label: 'Drop to Floor',
+        keyboardShortcut: 'D',
+        disabled: !hasSelection,
+        action: () => this.dropSelectionToFloor()
+      },
+      {
+        id: 'select-partner',
+        label: 'Select Partner',
+        keyboardShortcut: 'P',
+        disabled: !hasSelection || selectedEntity?.type !== 'door',
+        action: () => this.selectPartnerDoor()
+      },
+      { id: 'divider-1', label: '', divider: true, action: () => {} },
+      {
+        id: 'copy',
+        label: 'Copy',
+        keyboardShortcut: 'Ctrl+C',
+        disabled: !hasSelection,
+        action: () => this.copySelected()
+      },
+      {
+        id: 'paste',
+        label: 'Paste',
+        keyboardShortcut: 'Ctrl+V',
+        disabled: !this.clipboard,
+        action: () => this.paste()
+      },
+      {
+        id: 'duplicate',
+        label: 'Duplicate',
+        keyboardShortcut: 'Ctrl+D',
+        disabled: !hasSelection,
+        action: () => this.duplicateSelected()
+      },
+      {
+        id: 'group',
+        label: 'Group / Ungroup',
+        keyboardShortcut: 'Ctrl+G',
+        disabled: true,
+        action: () => this.groupSelection()
+      },
+      { id: 'divider-2', label: '', divider: true, action: () => {} },
+      {
+        id: 'undo',
+        label: 'Undo',
+        keyboardShortcut: 'Ctrl+Z',
+        action: () => this.undo()
+      },
+      {
+        id: 'redo',
+        label: 'Redo',
+        keyboardShortcut: 'Ctrl+Shift+Z',
+        action: () => this.redo()
+      },
+      { id: 'divider-3', label: '', divider: true, action: () => {} },
+      {
+        id: 'delete',
+        label: 'Delete',
+        keyboardShortcut: 'Del',
+        disabled: !hasSelection,
+        action: () => {
+          if (selected?.userData?.entityId) this.removeEntity(selected.userData.entityId);
+        }
+      }
+    ];
+
+    this.contextMenu.show(x, y, options);
   }
 
   // ═══════════════════════════════════════════════════════════════════

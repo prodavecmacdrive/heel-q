@@ -165,13 +165,13 @@
           "type": "primitive",
           "transform": {
             "position": {
-              "x": -1.632,
+              "x": -1.5,
               "y": 0.744,
-              "z": -3.344
+              "z": -3.5
             },
             "rotation": {
               "x": 5.44,
-              "y": 7.9,
+              "y": 15,
               "z": 12.71
             },
             "scale": {
@@ -252,13 +252,13 @@
           "type": "primitive",
           "transform": {
             "position": {
-              "x": 0.394,
+              "x": 0.5,
               "y": 0.801,
-              "z": -2.792
+              "z": -2.085
             },
             "rotation": {
               "x": -10.09,
-              "y": 25.87,
+              "y": 30,
               "z": 16.73
             },
             "scale": {
@@ -294,13 +294,13 @@
           "type": "primitive",
           "transform": {
             "position": {
-              "x": 0.006,
-              "y": 2.174,
-              "z": -4.39
+              "x": 0,
+              "y": 1.621,
+              "z": -4.5
             },
             "rotation": {
               "x": 5.32,
-              "y": -5.9,
+              "y": 0,
               "z": -44.4
             },
             "scale": {
@@ -329,6 +329,66 @@
           "sequenceAutoplay": true,
           "castShadows": false,
           "receiveShadows": true
+        },
+        {
+          "id": "camera_mojcdtas_1",
+          "name": "New camera",
+          "type": "camera",
+          "transform": {
+            "position": {
+              "x": -5,
+              "y": 3.875,
+              "z": 1.166
+            },
+            "rotation": {
+              "x": -23.43,
+              "y": -20.57,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            }
+          },
+          "visible": true,
+          "layer": 0,
+          "fov": 45,
+          "orthoSize": 10,
+          "near": 0.1,
+          "far": 100,
+          "isDefault": false,
+          "targetLookAt": ""
+        },
+        {
+          "id": "camera_moje5wp7_1",
+          "name": "New camera",
+          "type": "camera",
+          "transform": {
+            "position": {
+              "x": 0,
+              "y": 2.543,
+              "z": -5
+            },
+            "rotation": {
+              "x": -170.06,
+              "y": 19.96,
+              "z": -180
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            }
+          },
+          "visible": true,
+          "layer": 0,
+          "fov": 45,
+          "orthoSize": 10,
+          "near": 0.1,
+          "far": 100,
+          "isDefault": false,
+          "targetLookAt": ""
         }
       ],
       "spawnPoints": [

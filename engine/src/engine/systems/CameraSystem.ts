@@ -2,27 +2,25 @@ import { System } from '../ecs/System';
 import { World } from '../ecs/World';
 import { CameraMarker, Transform } from '../ecs/Component';
 import { RoomManager } from '../rooms/RoomManager';
+import { PixelRenderer } from '../rendering/PixelRenderer';
 import * as THREE from 'three';
 
 /**
  * CameraSystem — manages multi-camera switching within a room.
- *
- * Supports:
- *  - Multiple cameras per room (first default or first added is initial active)
- *  - LookAt target tracking (if targetLookAt references an entity ID)
- *  - Number key switching (1-9) to cycle cameras
  */
 export class CameraSystem extends System {
     private camera: THREE.PerspectiveCamera;
     private roomManager: RoomManager;
+    private renderer: PixelRenderer;
     private activeCameraIndex: number = 0;
     private cameraEntities: number[] = [];
     private lastRoomId: string | null = null;
 
-    constructor(world: World, camera: THREE.PerspectiveCamera, roomManager: RoomManager) {
+    constructor(world: World, camera: THREE.PerspectiveCamera, roomManager: RoomManager, renderer: PixelRenderer) {
         super(world);
         this.camera = camera;
         this.roomManager = roomManager;
+        this.renderer = renderer;
 
         document.addEventListener('keydown', (e) => {
             const num = parseInt(e.key);
@@ -30,6 +28,37 @@ export class CameraSystem extends System {
                 this.switchCamera(num - 1);
             }
         });
+
+        // Click to switch via thumbnails
+        window.addEventListener('mousedown', (e) => {
+            this.handleThumbnailClick(e);
+        });
+    }
+
+    private handleThumbnailClick(e: MouseEvent) {
+        if (this.cameraEntities.length <= 1) return;
+
+        // Use same math as PixelRenderer for hit detection
+        const thumbWidth = Math.floor(this.renderer.viewportWidth * 0.15);
+        const thumbHeight = Math.floor(thumbWidth / (16 / 9));
+        const padding = 10;
+
+        // Mouse Y is top-down in screen space
+        const mouseX = e.clientX;
+        const mouseY = window.innerHeight - e.clientY; // Invert to match viewport Y
+
+        for (let i = 0; i < this.cameraEntities.length; i++) {
+            if (i === this.activeCameraIndex) continue;
+
+            const relativeIdx = i > this.activeCameraIndex ? i - 1 : i;
+            const x = this.renderer.viewportX + this.renderer.viewportWidth - thumbWidth - padding;
+            const y = this.renderer.viewportY + padding + relativeIdx * (thumbHeight + padding);
+
+            if (this.renderer.isInsideRect(mouseX, mouseY, x, y, thumbWidth, thumbHeight)) {
+                this.switchCamera(i);
+                break;
+            }
+        }
     }
 
     update(_dt: number) {
@@ -112,5 +141,17 @@ export class CameraSystem extends System {
 
     public getCameraCount(): number {
         return this.cameraEntities.length;
+    }
+
+    public getCameraInfo() {
+        return this.cameraEntities.map(entity => {
+            const transform = this.world.getComponent(entity, 'Transform') as Transform;
+            const marker = this.world.getComponent(entity, 'CameraMarker') as CameraMarker;
+            return {
+                position: transform.position.clone(),
+                rotation: transform.rotation.clone(),
+                fov: marker.fov || 45
+            };
+        });
     }
 }

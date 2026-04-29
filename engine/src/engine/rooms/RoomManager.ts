@@ -912,7 +912,7 @@ export class RoomManager {
 
             const frameGroups = this.createAtlasFrameGroups(def.atlasFrames);
             const initialGroup = frameGroups['idle_down'] ? 'idle_down' : Object.keys(frameGroups)[0] ?? 'idle_down';
-            const initialFrames = frameGroups[initialGroup]?.map(index => def.atlasFrames[index]) ?? def.atlasFrames;
+            const initialFrames = frameGroups[initialGroup]?.map(index => def.atlasFrames![index]) ?? def.atlasFrames;
 
             this.world.addComponent(entity, 'AtlasAnimation', {
                 frames:          initialFrames,

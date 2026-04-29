@@ -18,6 +18,9 @@ export class SelectionManager {
   /** When false, pointer clicks are ignored (e.g. in world/height map modes) */
   public enabled = true;
 
+  /** When true, selection cannot be changed via pointer clicks */
+  public isLocked = false;
+
   /** Oriented wireframe highlight — lives as a child of the selected object so
    *  it automatically inherits position, rotation, and scale (true OBB display). */
   private highlight: THREE.LineSegments | null = null;
@@ -145,7 +148,7 @@ export class SelectionManager {
   private onPointerDown(e: PointerEvent) {
     // Only left-click, only when not dragging gizmo
     if (e.button !== 0) return;
-    if (!this.enabled) return;
+    if (!this.enabled || this.isLocked) return;
 
     const ndc = this.viewport.getNDC(e.clientX, e.clientY);
     this.raycaster.setFromCamera(ndc, this.viewport.camera);

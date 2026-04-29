@@ -12,6 +12,11 @@ export class PixelRenderer {
     private postScene: THREE.Scene;
     private quad: THREE.Mesh;
 
+    // --- Added for multi-camera support ---
+    private thumbnailTarget: THREE.WebGLRenderTarget;
+    private thumbnailQuad: THREE.Mesh;
+    private helperCamera: THREE.PerspectiveCamera; // Temporary camera for internal room-mapping
+
     // Letterbox viewport tracking (exposed for input coordinate mapping)
     public viewportX: number = 0;
     public viewportY: number = 0;
@@ -50,6 +55,17 @@ export class PixelRenderer {
         const planeGeometry = new THREE.PlaneGeometry(2, 2);
         this.quad = new THREE.Mesh(planeGeometry, planeMaterial);
         this.postScene.add(this.quad);
+
+        // --- Multi-camera thumbnails (internal small buffer) ---
+        this.thumbnailTarget = new THREE.WebGLRenderTarget(128, 72, {
+            minFilter: THREE.NearestFilter,
+            magFilter: THREE.NearestFilter,
+            format: THREE.RGBAFormat,
+            colorSpace: THREE.SRGBColorSpace,
+        });
+        const thumbMat = new THREE.MeshBasicMaterial({ map: this.thumbnailTarget.texture });
+        this.thumbnailQuad = new THREE.Mesh(planeGeometry, thumbMat);
+        this.helperCamera = new THREE.PerspectiveCamera(45, 16 / 9, 0.1, 100);
 
         // Bind resize event
         window.addEventListener('resize', this.onWindowResize.bind(this));
@@ -118,6 +134,59 @@ export class PixelRenderer {
 
         // Reset scissor
         this.renderer.setScissorTest(false);
+    }
+
+    /**
+     * Helper to check if a pixel coordinate is inside a rectangular area.
+     */
+    public isInsideRect(x: number, y: number, rectX: number, rectY: number, thumbW: number, thumbH: number): boolean {
+        // Convert screen coordinates to local viewport coordinates
+        // Mouse Y is top-down, but Three.js viewport Y is bottom-up (mostly)
+        // However, WebGL coordinates for mouse handling usually need to account for DOM height.
+        return x >= rectX && x <= rectX + thumbW && y >= rectY && y <= rectY + thumbH;
+    }
+
+    /**
+     * Specialized multi-pass thumbnail renderer for small camera windows.
+     * Renders the provided scene from multiple camera states into a shared thumbnail target,
+     * then composites them onto the screen.
+     */
+    public renderThumbnails(scene: THREE.Scene, cameras: { position: THREE.Vector3, rotation: THREE.Euler, fov: number }[], activeIndex: number) {
+        if (cameras.length <= 1) return;
+
+        const thumbWidth = Math.floor(this.viewportWidth * 0.15); // 15% of viewport width
+        const thumbHeight = Math.floor(thumbWidth / (16 / 9));
+        const padding = 10;
+
+        for (let i = 0; i < cameras.length; i++) {
+            // Skip the active one as it's the main view
+            if (i === activeIndex) continue;
+
+            // 1. Render thumbnail view to small target
+            this.helperCamera.position.copy(cameras[i].position);
+            this.helperCamera.rotation.copy(cameras[i].rotation);
+            this.helperCamera.fov = cameras[i].fov;
+            this.helperCamera.updateProjectionMatrix();
+
+            this.renderer.setRenderTarget(this.thumbnailTarget);
+            this.renderer.clear(true, true, true);
+            this.renderer.render(scene, this.helperCamera);
+
+            // 2. Render from target to screen at specific location
+            this.renderer.setRenderTarget(null);
+            
+            // Layout: bottom right, stacked vertically
+            const x = this.viewportX + this.viewportWidth - thumbWidth - padding;
+            const y = this.viewportY + padding + (i > activeIndex ? i - 1 : i) * (thumbHeight + padding);
+
+            this.renderer.setViewport(x, y, thumbWidth, thumbHeight);
+            this.renderer.setScissor(x, y, thumbWidth, thumbHeight);
+            this.renderer.setScissorTest(true);
+
+            // Using thumbnailQuad (which maps thumbnailTarget.texture)
+            this.renderer.render(this.thumbnailQuad, this.orthoCamera);
+            this.renderer.setScissorTest(false);
+        }
     }
 
     public getDomElement(): HTMLCanvasElement {

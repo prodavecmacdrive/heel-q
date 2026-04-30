@@ -169,6 +169,10 @@ export class EditorApp {
       () => this.activeRoom ? this.activeRoom.entities : []
     );
 
+    this.rightPanel.onWorldDoorSelect = (doorId) => {
+      this.selectWorldDoor(doorId);
+    };
+
     // Wire height-modifier inspector callbacks
     this.rightPanel.onModifierChange = (m) => {
       this.heightMapCtrl.updateModifier(m);
@@ -210,72 +214,26 @@ export class EditorApp {
       const entity = this.entityMap.get(entityId);
       if (!entity) return;
 
-      // ── Door constraint: project gizmo position directly onto the wall line ──
-      // This avoids all delta/start-pos drift by computing the nearest point on the
-      // infinite wall line from wherever TransformControls moved the object.
+      // ── Position handling ──
       if (entity.type === 'door') {
+        // Doors: project XZ position onto the wall line; Y stays at floor.
         const door = entity as DoorEntity;
-        const dirX = door.wallDirX;
-        const dirZ = door.wallDirZ;
-        const ancX = door.wallAnchorX;
-        const ancZ = door.wallAnchorZ;
-
-        // Project obj's current world-XZ position onto the wall line:
-        //   t = dot(obj_pos - anchor, wallDir)
-        //   projected = anchor + t * wallDir
-        const t = (obj.position.x - ancX) * dirX + (obj.position.z - ancZ) * dirZ;
-        const newX = parseFloat((ancX + t * dirX).toFixed(3));
-        const newZ = parseFloat((ancZ + t * dirZ).toFixed(3));
-        const wallAngleRad = Math.atan2(-dirZ, dirX);
-
-        // Update entity data
+        const t = (obj.position.x - door.wallAnchorX) * door.wallDirX + (obj.position.z - door.wallAnchorZ) * door.wallDirZ;
+        const newX = parseFloat((door.wallAnchorX + t * door.wallDirX).toFixed(3));
+        const newZ = parseFloat((door.wallAnchorZ + t * door.wallDirZ).toFixed(3));
         entity.transform.position.x = newX;
         entity.transform.position.y = 0;
         entity.transform.position.z = newZ;
-        entity.transform.rotation.x = 0;
-        entity.transform.rotation.y = parseFloat(THREE.MathUtils.radToDeg(wallAngleRad).toFixed(2));
-        entity.transform.rotation.z = 0;
-        // Scale is intentionally not touched — stays as set at creation
-
-        // Snap the Three.js object back so the gizmo reflects reality exactly
         obj.position.set(newX, 0, newZ);
-        obj.rotation.set(0, wallAngleRad, 0);
-
-        // Sync the world-map door segment midpoint
-        const worldDoor = this.world.doors.find(d => d.id === door.worldDoorId);
-        if (worldDoor) {
-          const segHalfLen = Math.sqrt(
-            (worldDoor.points[1].x - worldDoor.points[0].x) ** 2 +
-            (worldDoor.points[1].y - worldDoor.points[0].y) ** 2
-          ) / 2;
-          worldDoor.points[0] = { x: newX - dirX * segHalfLen, y: newZ - dirZ * segHalfLen };
-          worldDoor.points[1] = { x: newX + dirX * segHalfLen, y: newZ + dirZ * segHalfLen };
-          this.worldMapCtrl.rebuildRooms();
-
-          // Sync partner door entities in all other rooms
-          for (const room of this.world.rooms) {
-            if (room === this.activeRoom) continue;
-            for (const e of room.entities) {
-              if (e.type === 'door' && (e as DoorEntity).worldDoorId === door.worldDoorId) {
-                e.transform.position.x = newX;
-                e.transform.position.y = 0;
-                e.transform.position.z = newZ;
-              }
-            }
-          }
-        }
-
-        this.rightPanel.refresh();
-        return;
+      } else {
+        // All other entities: terrain-relative position.
+        const terrainY = this.heightMapCtrl.getHeightAt(obj.position.x, obj.position.z);
+        entity.transform.position.x = parseFloat(obj.position.x.toFixed(3));
+        entity.transform.position.y = parseFloat((obj.position.y - terrainY).toFixed(3));
+        entity.transform.position.z = parseFloat(obj.position.z.toFixed(3));
       }
 
-      // Store entity position as offset ABOVE terrain surface
-      // (world Y = entity.position.y + terrainHeight at that XZ)
-      const terrainY = this.heightMapCtrl.getHeightAt(obj.position.x, obj.position.z);
-      entity.transform.position.x = parseFloat(obj.position.x.toFixed(3));
-      entity.transform.position.y = parseFloat((obj.position.y - terrainY).toFixed(3));
-      entity.transform.position.z = parseFloat(obj.position.z.toFixed(3));
-
+      // All entities: rotation and scale handled identically.
       entity.transform.rotation.x = parseFloat(THREE.MathUtils.radToDeg(obj.rotation.x).toFixed(2));
       entity.transform.rotation.y = parseFloat(THREE.MathUtils.radToDeg(obj.rotation.y).toFixed(2));
       entity.transform.rotation.z = parseFloat(THREE.MathUtils.radToDeg(obj.rotation.z).toFixed(2));
@@ -283,6 +241,11 @@ export class EditorApp {
       entity.transform.scale.x = parseFloat(obj.scale.x.toFixed(3));
       entity.transform.scale.y = parseFloat(obj.scale.y.toFixed(3));
       entity.transform.scale.z = parseFloat(obj.scale.z.toFixed(3));
+
+      // Doors: keep the world-map segment in sync after position and scale are written.
+      if (entity.type === 'door') {
+        this.updateDoorWorldSegment(entity as DoorEntity);
+      }
 
       this.rightPanel.refresh();
     });
@@ -296,17 +259,11 @@ export class EditorApp {
         const mesh = this.meshMap.get(entityId);
         if (mesh && entity) {
           this.gizmo.attach(mesh);
-          // Doors are always in translate-only world-space mode; no rotate/scale.
-          if (entity.type === 'door') {
-            this.gizmo.transformControls.setMode('translate');
-            this.gizmo.transformControls.setSpace('world');
-          } else {
-            const tool = this.leftPanel.getTool();
-            if (tool === 'translate' || tool === 'rotate' || tool === 'scale') {
-              this.gizmo.setMode(tool as GizmoMode);
-            }
-            this.setGizmoSpaceForTool(this.leftPanel.getTool(), entity.type);
+          const tool = this.leftPanel.getTool();
+          if (tool === 'translate' || tool === 'rotate' || tool === 'scale') {
+            this.gizmo.setMode(tool as GizmoMode);
           }
+          this.setGizmoSpaceForTool(this.leftPanel.getTool(), entity.type);
         } else {
           this.gizmo.detach();
         }
@@ -665,11 +622,64 @@ export class EditorApp {
       this.meshMap.delete(entityId);
     }
 
-    this.entityMap.delete(entityId);
-    this.activeRoom.entities = this.activeRoom.entities.filter((e) => e.id !== entityId);
+    const entity = this.entityMap.get(entityId);
+    if (entity?.type === 'door') {
+      this.removeDoorByWorldDoorId((entity as DoorEntity).worldDoorId || entity.id);
+    } else {
+      this.entityMap.delete(entityId);
+      this.activeRoom.entities = this.activeRoom.entities.filter((e) => e.id !== entityId);
+    }
 
+    this.cleanupOrphanedWorldDoors();
     this.refreshOutliner();
+    this.worldMapCtrl.rebuildRooms();
     this.toast('Entity deleted', 'info');
+  }
+
+  private removeDoorByWorldDoorId(worldDoorId: string) {
+    // Remove the world door segment first.
+    this.world.doors = this.world.doors.filter((door) => door.id !== worldDoorId);
+
+    for (const room of this.world.rooms) {
+      const removed = room.entities.filter((e) => e.type === 'door' && (e as DoorEntity).worldDoorId === worldDoorId);
+      for (const doorEntity of removed) {
+        const mesh = this.meshMap.get(doorEntity.id);
+        if (mesh) {
+          this.roomGroup.remove(mesh);
+          this.disposeMesh(mesh);
+          this.meshMap.delete(doorEntity.id);
+        }
+        this.entityMap.delete(doorEntity.id);
+      }
+      room.entities = room.entities.filter((e) => !(e.type === 'door' && (e as DoorEntity).worldDoorId === worldDoorId));
+    }
+
+    this.cleanupOrphanedWorldDoors();
+
+    if (this.activeRoom && this.activeRoom.entities.every((e) => e.type !== 'door' || (e as DoorEntity).worldDoorId !== worldDoorId)) {
+      // If the active room lost a selected door, clear the selection.
+      if (this.selection.selectedObject?.userData?.entityId) {
+        const selectedId = this.selection.selectedObject.userData.entityId;
+        const selectedEntity = this.entityMap.get(selectedId);
+        if (!selectedEntity || selectedEntity.type === 'door') {
+          this.selection.deselect();
+          this.gizmo.detach();
+          this.rightPanel.inspectEntity(null);
+        }
+      }
+    }
+  }
+
+  private cleanupOrphanedWorldDoors() {
+    const referencedDoorIds = new Set<string>();
+    for (const room of this.world.rooms) {
+      for (const entity of room.entities) {
+        if (entity.type === 'door' && (entity as DoorEntity).worldDoorId) {
+          referencedDoorIds.add((entity as DoorEntity).worldDoorId);
+        }
+      }
+    }
+    this.world.doors = this.world.doors.filter((door) => referencedDoorIds.has(door.id));
   }
 
   public removeRoom(roomId: string) {
@@ -718,12 +728,28 @@ export class EditorApp {
     }
   }
 
-  private setGizmoSpaceForTool(tool: string, entityType?: string) {
-    if (entityType === 'door') {
-      this.gizmo.transformControls.setSpace('world');
+  private selectWorldDoor(worldDoorId: string) {
+    const matching = this.world.rooms
+      .map((room) => ({ room, door: room.entities.find((e) => e.type === 'door' && (e as DoorEntity).worldDoorId === worldDoorId) }))
+      .filter((entry) => entry.door) as Array<{ room: RoomData; door: DoorEntity }>;
+
+    if (matching.length === 0) {
+      this.toast('Door not found in any room', 'error');
       return;
     }
 
+    const { room, door } = matching[0];
+    this.selectRoom(room.id);
+    this.topPanel.setMode('room');
+
+    const mesh = this.meshMap.get(door.id);
+    if (mesh) {
+      this.selection.select(mesh);
+      this.gizmo.attach(mesh);
+    }
+  }
+
+  private setGizmoSpaceForTool(tool: string, entityType?: string) {
     if (tool === 'rotate' || tool === 'scale') {
       this.gizmo.transformControls.setSpace('local');
       return;
@@ -747,6 +773,45 @@ export class EditorApp {
     );
     mesh.scale.set(t.scale.x, t.scale.y, t.scale.z);
     mesh.visible = entity.visible;
+
+    if (entity.type === 'door') {
+      this.updateDoorWorldSegment(entity as DoorEntity);
+    }
+  }
+
+  /**
+   * Updates the world.doors segment endpoints to match this door entity's
+   * current position and scale. No partner sync — each door is independent.
+   */
+  private updateDoorWorldSegment(door: DoorEntity) {
+    if (!door.worldDoorId) return;
+    const worldDoor = this.world.doors.find((d) => d.id === door.worldDoorId);
+    if (!worldDoor) return;
+
+    const halfLen = Math.abs(door.transform.scale.x) / 2;
+    const midX = door.transform.position.x;
+    const midZ = door.transform.position.z;
+    worldDoor.points = [
+      { x: parseFloat((midX - door.wallDirX * halfLen).toFixed(3)), y: parseFloat((midZ - door.wallDirZ * halfLen).toFixed(3)) },
+      { x: parseFloat((midX + door.wallDirX * halfLen).toFixed(3)), y: parseFloat((midZ + door.wallDirZ * halfLen).toFixed(3)) }
+    ];
+    this.worldMapCtrl.rebuildRooms();
+
+    for (const room of this.world.rooms) {
+      for (const entity of room.entities) {
+        if (entity.type === 'door' && entity.id !== door.id && (entity as DoorEntity).worldDoorId === door.worldDoorId) {
+          const partner = entity as DoorEntity;
+          partner.transform.scale.x = door.transform.scale.x;
+          partner.transform.scale.y = door.transform.scale.y;
+          partner.transform.scale.z = door.transform.scale.z;
+
+          const partnerMesh = this.meshMap.get(partner.id);
+          if (partnerMesh) {
+            partnerMesh.scale.set(partner.transform.scale.x, partner.transform.scale.y, partner.transform.scale.z);
+          }
+        }
+      }
+    }
   }
 
   private addEntityFromBrowser(dragData: DragData) {
@@ -1413,6 +1478,10 @@ export class EditorApp {
         this.gizmo.setMode(tool as GizmoMode);
       }
       this.gizmo.attach(newMesh);
+    }
+
+    if (entity.type === 'door') {
+      this.updateDoorWorldSegment(entity as DoorEntity);
     }
 
     this.refreshOutliner();

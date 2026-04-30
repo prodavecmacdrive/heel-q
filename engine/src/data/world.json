@@ -53,54 +53,6 @@
       ],
       "entities": [
         {
-          "id": "door_1776477157485_room_1776477096922",
-          "name": "Door",
-          "type": "door",
-          "transform": {
-            "position": {
-              "x": -1.318,
-              "y": 0,
-              "z": -6.308
-            },
-            "rotation": {
-              "x": 0,
-              "y": 7.93,
-              "z": 0
-            },
-            "scale": {
-              "x": 1.929,
-              "y": 2.5,
-              "z": 0.35
-            }
-          },
-          "visible": true,
-          "layer": 0,
-          "targetRoomId": "room_1776477105780",
-          "targetSpawnId": "",
-          "interactionState": "open",
-          "materialType": "textured",
-          "color": "#6B4423",
-          "opacity": 1,
-          "textureSource": "textures/door.jpg",
-          "uvTilingX": 1,
-          "uvTilingY": 1,
-          "uvOffsetX": 0,
-          "uvOffsetY": 0,
-          "sequenceSource": "",
-          "sequenceJson": "",
-          "activeAnimation": "",
-          "playbackSpeed": 1,
-          "sequenceLoop": true,
-          "sequenceAutoplay": true,
-          "wallDirX": 0.990433900758765,
-          "wallDirZ": -0.13798800030356498,
-          "wallAnchorX": -1.5125157359474188,
-          "wallAnchorZ": -6.280547495344174,
-          "worldDoorId": "door_1776477157485",
-          "castShadow": false,
-          "receiveShadow": true
-        },
-        {
           "id": "camera_mo3on6df_4",
           "name": "New camera",
           "type": "camera",
@@ -389,6 +341,54 @@
           "far": 100,
           "isDefault": false,
           "targetLookAt": ""
+        },
+        {
+          "id": "door_1777497571191_room_1776477096922",
+          "name": "Door",
+          "type": "door",
+          "transform": {
+            "position": {
+              "x": -1.684,
+              "y": 0,
+              "z": -6.259
+            },
+            "rotation": {
+              "x": 0,
+              "y": -171.87,
+              "z": 0
+            },
+            "scale": {
+              "x": 1.706,
+              "y": 1.936,
+              "z": 0.35
+            }
+          },
+          "visible": true,
+          "layer": 0,
+          "targetRoomId": "room_1776477105780",
+          "targetSpawnId": "",
+          "interactionState": "open",
+          "materialType": "color",
+          "color": "#6B4423",
+          "opacity": 1,
+          "textureSource": "",
+          "uvTilingX": 1,
+          "uvTilingY": 1,
+          "uvOffsetX": 0,
+          "uvOffsetY": 0,
+          "sequenceSource": "",
+          "sequenceJson": "",
+          "activeAnimation": "",
+          "playbackSpeed": 1,
+          "sequenceLoop": true,
+          "sequenceAutoplay": true,
+          "wallDirX": -0.9899494936611666,
+          "wallDirZ": 0.14142135623730936,
+          "wallAnchorX": -1.683869346733228,
+          "wallAnchorZ": -6.259447236180968,
+          "worldDoorId": "door_1777497571191",
+          "castShadow": false,
+          "receiveShadow": true
         }
       ],
       "spawnPoints": [
@@ -469,54 +469,6 @@
       ],
       "entities": [
         {
-          "id": "door_1776477157485_room_1776477105780",
-          "name": "Door",
-          "type": "door",
-          "transform": {
-            "position": {
-              "x": -1.318,
-              "y": 0,
-              "z": -6.308
-            },
-            "rotation": {
-              "x": 0,
-              "y": 7.93,
-              "z": 0
-            },
-            "scale": {
-              "x": 1.929,
-              "y": 2.5,
-              "z": 0.35
-            }
-          },
-          "visible": true,
-          "layer": 0,
-          "targetRoomId": "room_1776477096922",
-          "targetSpawnId": "",
-          "interactionState": "open",
-          "materialType": "color",
-          "color": "#6B4423",
-          "opacity": 1,
-          "textureSource": "",
-          "uvTilingX": 1,
-          "uvTilingY": 1,
-          "uvOffsetX": 0,
-          "uvOffsetY": 0,
-          "sequenceSource": "",
-          "sequenceJson": "",
-          "activeAnimation": "",
-          "playbackSpeed": 1,
-          "sequenceLoop": true,
-          "sequenceAutoplay": true,
-          "wallDirX": 0.990433900758765,
-          "wallDirZ": -0.13798800030356498,
-          "wallAnchorX": -1.5125157359474188,
-          "wallAnchorZ": -6.280547495344174,
-          "worldDoorId": "door_1776477157485",
-          "castShadow": false,
-          "receiveShadow": true
-        },
-        {
           "id": "camera_mo3oopfe_5",
           "name": "New camera",
           "type": "camera",
@@ -574,6 +526,54 @@
           "intensity": 91,
           "distance": 10,
           "castShadows": true
+        },
+        {
+          "id": "door_1777497571191_room_1776477105780",
+          "name": "Door",
+          "type": "door",
+          "transform": {
+            "position": {
+              "x": -1.684,
+              "y": 0,
+              "z": -6.259
+            },
+            "rotation": {
+              "x": 0,
+              "y": -171.87,
+              "z": 0
+            },
+            "scale": {
+              "x": 1.706,
+              "y": 1.936,
+              "z": 0.35
+            }
+          },
+          "visible": true,
+          "layer": 0,
+          "targetRoomId": "room_1776477096922",
+          "targetSpawnId": "",
+          "interactionState": "open",
+          "materialType": "color",
+          "color": "#6B4423",
+          "opacity": 1,
+          "textureSource": "",
+          "uvTilingX": 1,
+          "uvTilingY": 1,
+          "uvOffsetX": 0,
+          "uvOffsetY": 0,
+          "sequenceSource": "",
+          "sequenceJson": "",
+          "activeAnimation": "",
+          "playbackSpeed": 1,
+          "sequenceLoop": true,
+          "sequenceAutoplay": true,
+          "wallDirX": -0.9899494936611666,
+          "wallDirZ": 0.14142135623730936,
+          "wallAnchorX": -1.683869346733228,
+          "wallAnchorZ": -6.259447236180968,
+          "worldDoorId": "door_1777497571191",
+          "castShadow": false,
+          "receiveShadow": true
         }
       ],
       "spawnPoints": [],
@@ -604,15 +604,15 @@
   ],
   "doors": [
     {
-      "id": "door_1776477157485",
+      "id": "door_1777497571191",
       "points": [
         {
-          "x": -2.273446531503944,
-          "y": -6.174886466448489
+          "x": -0.84,
+          "y": -6.38
         },
         {
-          "x": -0.3625534684960561,
-          "y": -6.441113533551511
+          "x": -2.528,
+          "y": -6.138
         }
       ],
       "room1Id": "room_1776477096922",

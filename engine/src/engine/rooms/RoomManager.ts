@@ -673,43 +673,117 @@ export class RoomManager {
         const color = new THREE.Color(def.lightColor || '#ffffff');
         const intensity = def.lightIntensity ?? 1;
         const distance = def.lightDistance ?? 10;
+        const decay = def.lightDecay ?? 2;
+
+        const position = new THREE.Vector3(def.position.x, def.position.y + baseY, def.position.z);
+        const rotation = new THREE.Euler(
+            (def.rotation?.x ?? 0) * Math.PI / 180,
+            (def.rotation?.y ?? 0) * Math.PI / 180,
+            (def.rotation?.z ?? 0) * Math.PI / 180,
+            'XYZ'
+        );
+
+        // targetPosition is stored as world-space in the editor.
+        // (0,0,0) default means "point at world origin", matching editor visual.
+        const worldTarget = new THREE.Vector3(
+            def.lightTargetX ?? 0,
+            def.lightTargetY ?? 0,
+            def.lightTargetZ ?? 0,
+        );
 
         let light: THREE.Light;
         switch (def.lightType) {
-            case 'directional':
-                light = new THREE.DirectionalLight(color, intensity);
+            case 'directional': {
+                const dl = new THREE.DirectionalLight(color, intensity);
+                dl.position.copy(position);
+                dl.target.position.copy(worldTarget);
+                this.scene.add(dl.target);
+                dl.target.updateMatrixWorld();
+                light = dl;
                 break;
-            case 'spot':
-                light = new THREE.SpotLight(color, intensity, distance);
+            }
+            case 'spot': {
+                const sl = new THREE.SpotLight(color, intensity, distance);
+                sl.angle = THREE.MathUtils.degToRad(def.lightAngle ?? 45);
+                sl.penumbra = def.lightPenumbra ?? 0;
+                sl.decay = decay;
+                sl.position.copy(position);
+                sl.target.position.copy(worldTarget);
+                this.scene.add(sl.target);
+                sl.target.updateMatrixWorld();
+                light = sl;
                 break;
-            default:
-                light = new THREE.PointLight(color, intensity, distance);
+            }
+            case 'rect_area': {
+                const rl = new THREE.RectAreaLight(color, intensity, def.lightRectWidth ?? 1, def.lightRectHeight ?? 1);
+                rl.position.copy(position);
+                rl.rotation.copy(rotation);
+                light = rl;
                 break;
+            }
+            default: {
+                const pl = new THREE.PointLight(color, intensity, distance);
+                pl.decay = decay;
+                pl.position.copy(position);
+                light = pl;
+                break;
+            }
         }
 
-        light.position.set(def.position.x, def.position.y + baseY, def.position.z);
         (light as any).isRoomLight = true;
 
         // Shadow configuration
-        if (def.castShadows) {
+        if (def.castShadows && light.shadow) {
             light.castShadow = true;
-            if (light.shadow) {
-                light.shadow.mapSize.width = 1024;
-                light.shadow.mapSize.height = 1024;
-                if ('camera' in light.shadow) {
-                    const cam = light.shadow.camera as THREE.OrthographicCamera | THREE.PerspectiveCamera;
-                    cam.near = 0.5;
-                    cam.far = 50;
-                    if (cam instanceof THREE.OrthographicCamera) {
-                        cam.left = -15;
-                        cam.right = 15;
-                        cam.top = 15;
-                        cam.bottom = -15;
-                    }
-                }
-                light.shadow.bias = 0.0;
-                light.shadow.normalBias = 0.15;
+            const res = def.shadowResolution ?? 1024;
+            light.shadow.mapSize.width = res;
+            light.shadow.mapSize.height = res;
+            const cam = light.shadow.camera as THREE.OrthographicCamera | THREE.PerspectiveCamera;
+            if (cam instanceof THREE.OrthographicCamera) {
+                // DirectionalLight shadow
+                cam.near = 0.5;
+                cam.far = 500;
+                cam.left  = -20;
+                cam.right =  20;
+                cam.top   =  20;
+                cam.bottom = -20;
+                cam.updateProjectionMatrix();
+            } else if (cam instanceof THREE.PerspectiveCamera) {
+                // SpotLight or PointLight shadow
+                cam.near = 0.5;
+                cam.far = Math.max(distance * 1.5, 50);
+                cam.updateProjectionMatrix();
             }
+            light.shadow.bias = def.shadowBias ?? 0;
+            light.shadow.normalBias = def.shadowNormalBias ?? 0.15;
+            light.shadow.radius = def.shadowRadius ?? 1;
+        }
+
+        // Cookie / gobo texture
+        if (def.lightCookieTexture && (def.lightType === 'spot' || def.lightType === 'directional')) {
+            this.textureManager.loadTexture(def.lightCookieTexture, `/assets/${def.lightCookieTexture}`)
+                .then((tex) => {
+                    (light as any).map = tex;
+                })
+                .catch(() => {});
+        }
+
+        // Flicker: store params on light for LightFlickerSystem (future)
+        if (def.flickerMode && def.flickerMode !== 'none') {
+            (light as any).flickerMode = def.flickerMode;
+            (light as any).flickerSpeed = def.flickerSpeed ?? 1;
+            (light as any).flickerAmplitude = def.flickerAmplitude ?? 0.1;
+            (light as any).flickerBaseIntensity = intensity;
+            (light as any).flickerDecay = def.flickerDecay ?? 0.5;
+            // Pattern stored as string in room data; parse into array for runtime use
+            try {
+                const pat = typeof def.flickerPattern === 'string' ? JSON.parse(def.flickerPattern) : def.flickerPattern;
+                (light as any).flickerPattern = Array.isArray(pat) ? pat.map((v: any) => Number(v) ? 1 : 0) : [0,1,0,1];
+            } catch (err) {
+                (light as any).flickerPattern = [0,1,0,1];
+            }
+            // Initialize current flicker intensity
+            (light as any).flickerCurrent = intensity;
         }
 
         this.scene.add(light);

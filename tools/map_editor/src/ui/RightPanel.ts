@@ -45,6 +45,8 @@ export class RightPanel {
   public onEntityHover: ((entityId: string | null) => void) | null = null;
   /** Fires on every input keystroke (live preview, no autosave) */
   public onLiveChange: ((entity: EditorEntity) => void) | null = null;
+  /** Fires when the user toggles Solo Mode on a light entity */
+  public onSoloLight: ((entityId: string | null) => void) | null = null;
 
   /** Fires when a room is clicked in the world-map outliner */
   public onWorldRoomSelect: ((roomId: string) => void) | null = null;
@@ -391,13 +393,54 @@ export class RightPanel {
   }
 
   private renderLightProps(e: LightEntity): string {
-    return this.section('Light', `
-      ${this.propSelect('lightType', 'Type', e.lightType, ['point', 'directional', 'spot'])}
-      ${this.propColor('color', 'Color', e.color)}
-      ${this.propNumber('intensity', 'Intensity', e.intensity, 2)}
-      ${this.propNumber('distance', 'Distance', e.distance, 1)}
-      ${this.propCheckbox('castShadows', 'Cast Shadows', e.castShadows)}
+    const isSpot = e.lightType === 'spot';
+    const isDirectional = e.lightType === 'directional';
+    const isRectArea = e.lightType === 'rect_area';
+    const hasTarget = isSpot || isDirectional;
+    const hasDistance = !isDirectional && !isRectArea;
+    const hasDecay = !isDirectional && !isRectArea;
+
+    let html = this.section('Main Settings', `
+      ${this.propSelect('lightType', 'Type', e.lightType, ['point', 'spot', 'directional', 'rect_area'])}
+      ${this.propColor('color', 'Color', e.color ?? '#ffffff')}
+      ${this.propSlider('intensity', 'Intensity', e.intensity ?? 1, 0, 20, 0.1, 2)}
+      ${hasDistance ? this.propSlider('distance', 'Distance', e.distance ?? 10, 0, 100, 0.5, 1) : ''}
+      ${hasDecay ? this.propSlider('decay', 'Decay', e.decay ?? 2, 0, 5, 0.1, 2) : ''}
+      ${isSpot ? this.propSlider('angle', 'Angle (°)', e.angle ?? 45, 1, 90, 1, 0) : ''}
+      ${isSpot ? this.propSlider('penumbra', 'Penumbra', e.penumbra ?? 0, 0, 1, 0.01, 2) : ''}
+      ${isRectArea ? this.propNumber('rectWidth', 'Rect Width', e.rectWidth ?? 1, 2) : ''}
+      ${isRectArea ? this.propNumber('rectHeight', 'Rect Height', e.rectHeight ?? 1, 2) : ''}
+      ${hasTarget ? this.propVec3('targetPosition', 'Target Pos', e.targetPosition ?? { x: 0, y: 0, z: 0 }) : ''}
+    `) + this.section('Shadows', `
+      ${this.propCheckbox('castShadows', 'Cast Shadows', e.castShadows ?? false)}
+      ${!isRectArea && e.castShadows ? `
+        ${this.propSelect('shadowResolution', 'Resolution', String(e.shadowResolution ?? 1024), ['256', '512', '1024', '2048'])}
+        ${this.propSlider('shadowBias', 'Bias', e.shadowBias ?? 0, -0.01, 0.01, 0.0001, 4)}
+        ${this.propSlider('shadowNormalBias', 'Normal Bias', e.shadowNormalBias ?? 0.15, -0.05, 0.05, 0.001, 3)}
+        ${this.propSlider('shadowRadius', 'Blur Radius', e.shadowRadius ?? 1, 0, 8, 0.1, 1)}
+      ` : ''}
+    `) + this.section('Effects', `
+      ${this.propAsset('cookieTexture', 'Cookie Texture', e.cookieTexture ?? '', 'textures')}
+      ${this.propSelect('flickerMode', 'Flicker Mode', e.flickerMode ?? 'none', ['none', 'pattern', 'random'])}
+      ${e.flickerMode !== 'none' ? this.propSlider('flickerSpeed', 'Flicker Speed', e.flickerSpeed ?? 1, 0.1, 50, 0.1, 1) : ''}
+      ${e.flickerMode !== 'none' ? this.propSlider('flickerAmplitude', 'Amplitude', e.flickerAmplitude ?? 0.1, 0, 1, 0.01, 2) : ''}
+      ${e.flickerMode !== 'none' ? this.propSlider('flickerDecay', 'Decay Rate', e.flickerDecay ?? 0.5, 0, 10, 0.01, 2) : ''}
+      ${e.flickerMode === 'pattern' ? this.propInput('flickerPattern', 'Flicker Pattern', e.flickerPattern ?? '[0,1,0,1]') : ''}
     `);
+
+    // Solo Mode button
+    html += `<div class="inspector-section">
+      <button class="inspector-action-btn" id="inspector-solo-light" style="width:100%;margin:4px 0">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px">
+          <circle cx="12" cy="12" r="5"/><line x1="12" y1="2" x2="12" y2="4"/>
+          <line x1="12" y1="20" x2="12" y2="22"/><line x1="2" y1="12" x2="4" y2="12"/>
+          <line x1="20" y1="12" x2="22" y2="12"/>
+        </svg>
+        Solo Light
+      </button>
+    </div>`;
+
+    return html;
   }
 
   private renderSoundProps(e: SoundEntity): string {
@@ -650,6 +693,23 @@ export class RightPanel {
       </div>`;
   }
 
+  private propSlider(key: string, label: string, value: number, min: number, max: number, step: number, decimals: number = 2): string {
+    const val = value ?? 0;
+    const clampedVal = Math.min(max, Math.max(min, val));
+    return `
+      <div class="prop-row">
+        <span class="prop-label">${label}</span>
+        <div class="prop-slider-group">
+          <input type="range" class="prop-slider" data-prop="${key}"
+            min="${min}" max="${max}" step="${step}" value="${clampedVal}"
+            oninput="this.nextElementSibling.value=parseFloat(this.value).toFixed(${decimals})" />
+          <input type="number" class="prop-slider-value" data-prop="${key}"
+            min="${min}" max="${max}" step="${step}" value="${clampedVal.toFixed(decimals)}"
+            oninput="this.previousElementSibling.value=this.value" />
+        </div>
+      </div>`;
+  }
+
   private propVec3(key: string, label: string, v: Vec3): string {
     const vec = v || { x: 0, y: 0, z: 0 };
     return `
@@ -689,6 +749,13 @@ export class RightPanel {
     document.getElementById('inspector-fly-camera')?.addEventListener('click', () => {
       if (this.onFlightMode && entity.type === 'camera') {
         this.onFlightMode(entity as CameraEntity, true);
+      }
+    });
+
+    // Solo Light button
+    document.getElementById('inspector-solo-light')?.addEventListener('click', () => {
+      if (this.onSoloLight && entity.type === 'light') {
+        this.onSoloLight(entity.id);
       }
     });
 
@@ -749,7 +816,7 @@ export class RightPanel {
 
     if (el.type === 'checkbox') {
       (entity as any)[key] = el.checked;
-    } else if (el.type === 'number') {
+    } else if (el.type === 'number' || el.type === 'range') {
       (entity as any)[key] = parseFloat(el.value) || 0;
     } else if (key === 'targetEntityIds') {
       (entity as any)[key] = el.value.split(',').map(s => s.trim()).filter(Boolean);

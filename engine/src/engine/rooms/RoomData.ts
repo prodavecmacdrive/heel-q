@@ -30,6 +30,24 @@ export interface EntitySpawnDef {
     lightColor?: string;
     lightIntensity?: number;
     lightDistance?: number;
+    lightDecay?: number;
+    lightAngle?: number;        // degrees, spotlight only
+    lightPenumbra?: number;
+    lightTargetX?: number;
+    lightTargetY?: number;
+    lightTargetZ?: number;
+    shadowResolution?: number;
+    shadowBias?: number;
+    shadowNormalBias?: number;
+    shadowRadius?: number;
+    lightCookieTexture?: string;
+    flickerMode?: string;       // 'none' | 'pattern' | 'random'
+    flickerSpeed?: number;
+    flickerAmplitude?: number;
+    flickerDecay?: number;
+    flickerPattern?: string;
+    lightRectWidth?: number;
+    lightRectHeight?: number;
     /** For doors */
     targetRoomId?: string;
     targetSpawnId?: string;

@@ -114,7 +114,25 @@ export class WorldLoader {
             result.lightColor = e.color || '#ffffff';
             result.lightIntensity = e.intensity ?? 1;
             result.lightDistance = e.distance ?? 10;
+            result.lightDecay = e.decay ?? 2;
+            result.lightAngle = e.angle ?? 45;
+            result.lightPenumbra = e.penumbra ?? 0;
+            result.lightTargetX = e.targetPosition?.x ?? 0;
+            result.lightTargetY = e.targetPosition?.y ?? 0;
+            result.lightTargetZ = e.targetPosition?.z ?? 0;
             result.castShadows = e.castShadows ?? false;
+            result.shadowResolution = e.shadowResolution ?? 1024;
+            result.shadowBias = e.shadowBias ?? 0;
+            result.shadowNormalBias = e.shadowNormalBias ?? 0.15;
+            result.shadowRadius = e.shadowRadius ?? 1;
+            result.lightCookieTexture = e.cookieTexture || '';
+            result.flickerMode = e.flickerMode ?? 'none';
+            result.flickerSpeed = e.flickerSpeed ?? 1;
+            result.flickerAmplitude = e.flickerAmplitude ?? 0.1;
+            result.flickerDecay = e.flickerDecay ?? 0.5;
+            result.flickerPattern = e.flickerPattern ?? '[0,1,0,1]';
+            result.lightRectWidth = e.rectWidth ?? 1;
+            result.lightRectHeight = e.rectHeight ?? 1;
         } else if (e.type === 'door') {
             result.targetRoomId = e.targetRoomId || '';
             result.targetSpawnId = e.targetSpawnId || '';

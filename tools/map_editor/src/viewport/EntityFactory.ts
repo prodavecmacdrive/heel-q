@@ -3,6 +3,7 @@
    ═══════════════════════════════════════════════════════════════════════ */
 
 import * as THREE from 'three';
+import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
 import type {
   EditorEntity,
   PrimitiveEntity,
@@ -243,41 +244,114 @@ export class EntityFactory {
 
   private createLightHelper(entity: LightEntity): THREE.Object3D {
     const group = new THREE.Group();
-    const color = new THREE.Color(entity.color);
+    const color = new THREE.Color(entity.color ?? '#ffffff');
+    const intensity = entity.intensity ?? 1;
+    const distance = entity.distance ?? 10;
+    const tp = entity.targetPosition ?? { x: 0, y: 0, z: 0 };
 
-    // Glowing orb
-    const orbGeo = new THREE.SphereGeometry(0.2, 12, 8);
-    const orbMat = new THREE.MeshBasicMaterial({
-      color,
-    });
-    const orb = new THREE.Mesh(orbGeo, orbMat);
-    orb.position.y = 0.3;
-    group.add(orb);
+    // Entity position used to compute target sphere local offset
+    const ep = entity.transform?.position ?? { x: 0, y: 0, z: 0 };
 
-    // Light rays (cross wireframe)
-    const rayMat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.5 });
-    const points = [
-      new THREE.Vector3(-0.5, 0.3, 0), new THREE.Vector3(0.5, 0.3, 0),
-      new THREE.Vector3(0, -0.2, 0), new THREE.Vector3(0, 0.8, 0),
-      new THREE.Vector3(0, 0.3, -0.5), new THREE.Vector3(0, 0.3, 0.5),
-    ];
-    for (let i = 0; i < points.length; i += 2) {
-      const geo = new THREE.BufferGeometry().setFromPoints([points[i], points[i + 1]]);
-      group.add(new THREE.Line(geo, rayMat));
+    let light: THREE.Light;
+    let helper: THREE.Object3D | null = null;
+
+    switch (entity.lightType) {
+      case 'directional': {
+        const dl = new THREE.DirectionalLight(color, intensity);
+        // Target is added as a child; local pos = worldTarget - worldLight
+        dl.target.position.set(tp.x - ep.x, tp.y - ep.y, tp.z - ep.z);
+        group.add(dl.target);
+        light = dl;
+        const dh = new THREE.DirectionalLightHelper(dl, 0.6);
+        helper = dh;
+        break;
+      }
+      case 'spot': {
+        const sl = new THREE.SpotLight(color, intensity, distance);
+        sl.angle = THREE.MathUtils.degToRad(entity.angle ?? 45);
+        sl.penumbra = entity.penumbra ?? 0;
+        sl.decay = entity.decay ?? 2;
+        sl.target.position.set(tp.x - ep.x, tp.y - ep.y, tp.z - ep.z);
+        group.add(sl.target);
+        light = sl;
+        const sh = new THREE.SpotLightHelper(sl);
+        helper = sh;
+        break;
+      }
+      case 'rect_area': {
+        RectAreaLightUniformsLib.init();
+        const rl = new THREE.RectAreaLight(color, intensity, entity.rectWidth ?? 1, entity.rectHeight ?? 1);
+        light = rl;
+        // Visual plane for rect area
+        const rectGeo = new THREE.PlaneGeometry(entity.rectWidth ?? 1, entity.rectHeight ?? 1);
+        const rectMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.25, side: THREE.DoubleSide });
+        group.add(new THREE.Mesh(rectGeo, rectMat));
+        const edges = new THREE.EdgesGeometry(rectGeo);
+        group.add(new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color })));
+        break;
+      }
+      default: {
+        const pl = new THREE.PointLight(color, intensity, distance);
+        pl.decay = entity.decay ?? 2;
+        light = pl;
+        const ph = new THREE.PointLightHelper(pl, 0.3);
+        helper = ph;
+        break;
+      }
     }
 
-    // Range ring
-    const ringGeo = new THREE.RingGeometry(entity.distance * 0.8, entity.distance, 32);
-    const ringMat = new THREE.MeshBasicMaterial({
-      color,
-      transparent: true,
-      opacity: 0.08,
-      side: THREE.DoubleSide,
-    });
-    const ring = new THREE.Mesh(ringGeo, ringMat);
-    ring.rotation.x = -Math.PI / 2;
-    ring.position.y = 0.01;
-    group.add(ring);
+    // Configure shadows on the light instance
+    if (entity.castShadows && light.shadow) {
+      light.castShadow = true;
+      const res = entity.shadowResolution ?? 1024;
+      light.shadow.mapSize.set(res, res);
+      light.shadow.bias = entity.shadowBias ?? 0;
+      light.shadow.normalBias = entity.shadowNormalBias ?? 0.15;
+      light.shadow.radius = entity.shadowRadius ?? 1;
+    }
+
+    // Cookie texture (spot / directional)
+    if (entity.cookieTexture && (entity.lightType === 'spot' || entity.lightType === 'directional')) {
+      new THREE.TextureLoader().load(entity.cookieTexture, (tex) => {
+        (light as any).map = tex;
+      });
+    }
+
+    light.position.set(0, 0, 0);
+    (light as any).isEditorLight = true;
+    group.add(light);
+    if (helper) group.add(helper);
+
+    // Store refs for EditorApp to use (CameraHelper, helper updates, solo mode)
+    group.userData.lightInstance = light;
+    group.userData.lightHelper = helper;
+
+    // Small icon orb so the entity is always visible / pickable
+    const orbGeo = new THREE.SphereGeometry(0.12, 10, 7);
+    const orbMat = new THREE.MeshBasicMaterial({ color });
+    group.add(new THREE.Mesh(orbGeo, orbMat));
+
+    // ── Target sphere for spot / directional ──────────────────────
+    if (entity.lightType === 'spot' || entity.lightType === 'directional') {
+      const targetGeo = new THREE.SphereGeometry(0.1, 8, 6);
+      const targetMat = new THREE.MeshBasicMaterial({ color: 0xffcc00, wireframe: true });
+      const targetSphere = new THREE.Mesh(targetGeo, targetMat);
+      // Local position = worldTarget - worldLight (group not yet translated)
+      targetSphere.position.set(tp.x - ep.x, tp.y - ep.y, tp.z - ep.z);
+      // Make it pickable and recognisable by EditorApp
+      targetSphere.userData.entityId = entity.id;       // same id → right inspector
+      targetSphere.userData.isLightTarget = true;
+      targetSphere.userData.parentEntityId = entity.id;
+
+      // Direction line from origin to target
+      const lineGeo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(0, 0, 0),
+        targetSphere.position.clone(),
+      ]);
+      group.add(new THREE.Line(lineGeo, new THREE.LineBasicMaterial({ color: 0xffcc00, transparent: true, opacity: 0.5 })));
+      group.add(targetSphere);
+      group.userData.targetSphere = targetSphere;
+    }
 
     return group;
   }

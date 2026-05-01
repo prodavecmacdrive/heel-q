@@ -14,6 +14,7 @@ import { MovementSystem } from './systems/MovementSystem';
 import { PortalSystem } from './systems/PortalSystem';
 import { InputSystem } from './systems/InputSystem';
 import { AnimationSystem } from './systems/AnimationSystem';
+import { LightFlickerSystem } from './systems/LightFlickerSystem';
 import { CharacterControlSystem } from './systems/CharacterControlSystem';
 import { DepthSortSystem } from './systems/DepthSortSystem';
 import { CameraSystem } from './systems/CameraSystem';
@@ -81,6 +82,9 @@ export class Engine {
             new PortalSystem(this.world, this.roomManager, this.availableRooms)
         );
         this.world.addSystem(new AnimationSystem(this.world));
+
+        // Light flicker / effects (applies to scene lights tagged by RoomManager)
+        this.world.addSystem(new LightFlickerSystem(this.world, this.scene));
 
         // 3. Visual (after logic, before render)
         this.world.addSystem(new SpriteSystem(this.world, this.camera));

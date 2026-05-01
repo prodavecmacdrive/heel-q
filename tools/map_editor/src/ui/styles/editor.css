@@ -638,6 +638,39 @@ html, body {
   margin: -5px;
 }
 
+/* Slider input */
+.prop-slider-group {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: 1;
+  min-width: 0;
+}
+.prop-slider {
+  flex: 1;
+  min-width: 0;
+  height: 4px;
+  accent-color: var(--accent-blue);
+  cursor: pointer;
+}
+.prop-slider-value {
+  width: 54px;
+  flex-shrink: 0;
+  height: 22px;
+  padding: 0 4px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  outline: none;
+  text-align: right;
+}
+.prop-slider-value:focus {
+  border-color: var(--accent-blue);
+}
+
 /* Delete button */
 .inspector-delete-btn {
   display: flex;

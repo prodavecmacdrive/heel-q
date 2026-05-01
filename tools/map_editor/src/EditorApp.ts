@@ -87,6 +87,12 @@ export class EditorApp {
   /** When true, captureHistory() is a no-op (used for multi-step atomic actions) */
   private _suppressHistory = false;
 
+  // ── Light editor state ──
+  private activeShadowCameraHelper: THREE.CameraHelper | null = null;
+  private soloLightEntityId: string | null = null;
+  /** True when gizmo is attached to a light target sphere, not the entity root */
+  private activeLightTargetEntityId: string | null = null;
+
   constructor() {
     this.world = createDefaultWorld();
   }
@@ -155,8 +161,15 @@ export class EditorApp {
       (target) => {
         if ('type' in target) {
           this.captureHistory();
-          this.refreshEntityMesh(target as EditorEntity);
+          const ent = target as EditorEntity;
+          this.refreshEntityMesh(ent);
           this.worldMapCtrl.rebuildRooms();
+          // After mesh rebuild, sync light helpers and shadow camera
+          if (ent.type === 'light') {
+            const mesh = this.meshMap.get(ent.id);
+            (mesh?.userData.lightHelper as any)?.update?.();
+            this.updateShadowCameraHelper(ent);
+          }
         } else {
           // Room property changed
           this.worldMapCtrl.rebuildRooms();
@@ -171,6 +184,11 @@ export class EditorApp {
 
     this.rightPanel.onWorldDoorSelect = (doorId) => {
       this.selectWorldDoor(doorId);
+    };
+
+    // Solo light callback
+    this.rightPanel.onSoloLight = (entityId) => {
+      this.toggleLightSolo(entityId ?? '');
     };
 
     // Wire height-modifier inspector callbacks
@@ -209,6 +227,31 @@ export class EditorApp {
 
     // ── Gizmo change ──
     this.gizmo.setOnChange((obj) => {
+      // ── Light target sphere drag ──
+      if (obj.userData?.isLightTarget) {
+        const parentEntityId = obj.userData.parentEntityId as string;
+        const lightEntity = this.entityMap.get(parentEntityId) as import('./types/entities').LightEntity | undefined;
+        if (lightEntity) {
+          const worldPos = new THREE.Vector3();
+          obj.getWorldPosition(worldPos);
+          lightEntity.targetPosition = {
+            x: parseFloat(worldPos.x.toFixed(3)),
+            y: parseFloat(worldPos.y.toFixed(3)),
+            z: parseFloat(worldPos.z.toFixed(3)),
+          };
+          // Propagate to the THREE.Light target object
+          const parentMesh = this.meshMap.get(parentEntityId);
+          const lightInst = parentMesh?.userData.lightInstance as THREE.SpotLight | THREE.DirectionalLight | undefined;
+          if (lightInst && 'target' in lightInst) {
+            lightInst.target.position.copy(worldPos);
+            lightInst.target.updateMatrixWorld();
+            (parentMesh?.userData.lightHelper as any)?.update?.();
+          }
+          this.rightPanel.refresh();
+        }
+        return;
+      }
+
       const entityId = obj.userData?.entityId;
       if (!entityId) return;
       const entity = this.entityMap.get(entityId);
@@ -247,6 +290,25 @@ export class EditorApp {
         this.updateDoorWorldSegment(entity as DoorEntity);
       }
 
+      // Light helper sync after move/rotate
+      if (entity.type === 'light') {
+        (obj.userData.lightHelper as any)?.update?.();
+        this.updateShadowCameraHelper(entity);
+        // Keep targetPosition in sync with the target sphere's new world position.
+        // The sphere is a group child so it moves with the entity; the stored
+        // world-space coordinate must be refreshed every time the entity moves or rotates.
+        const targetSphere = obj.userData.targetSphere as THREE.Mesh | undefined;
+        if (targetSphere) {
+          const wp = new THREE.Vector3();
+          targetSphere.getWorldPosition(wp);
+          (entity as import('./types/entities').LightEntity).targetPosition = {
+            x: parseFloat(wp.x.toFixed(3)),
+            y: parseFloat(wp.y.toFixed(3)),
+            z: parseFloat(wp.z.toFixed(3)),
+          };
+        }
+      }
+
       this.rightPanel.refresh();
     });
 
@@ -256,20 +318,34 @@ export class EditorApp {
         const entity = this.entityMap.get(entityId);
         this.rightPanel.inspectEntity(entity ?? null);
 
+        const selectedObj = this.selection.selectedObject;
         const mesh = this.meshMap.get(entityId);
-        if (mesh && entity) {
+
+        if (selectedObj?.userData.isLightTarget && mesh) {
+          // Clicked on the light's target sphere → attach gizmo to sphere only
+          this.gizmo.attach(selectedObj);
+          this.gizmo.setMode('translate');
+          this.activeLightTargetEntityId = entityId;
+        } else if (mesh && entity) {
           this.gizmo.attach(mesh);
           const tool = this.leftPanel.getTool();
           if (tool === 'translate' || tool === 'rotate' || tool === 'scale') {
             this.gizmo.setMode(tool as GizmoMode);
           }
           this.setGizmoSpaceForTool(this.leftPanel.getTool(), entity.type);
+          this.activeLightTargetEntityId = null;
         } else {
           this.gizmo.detach();
+          this.activeLightTargetEntityId = null;
         }
+
+        // Shadow frustum CameraHelper
+        this.updateShadowCameraHelper(entity ?? null);
       } else {
         this.rightPanel.inspectEntity(null);
         this.gizmo.detach();
+        this.activeLightTargetEntityId = null;
+        this.updateShadowCameraHelper(null);
       }
     });
 
@@ -777,6 +853,63 @@ export class EditorApp {
     if (entity.type === 'door') {
       this.updateDoorWorldSegment(entity as DoorEntity);
     }
+  }
+
+  /**
+   * Creates or removes the shadow frustum CameraHelper for the currently
+   * selected light entity.
+   */
+  private updateShadowCameraHelper(entity: EditorEntity | null) {
+    // Dispose previous helper
+    if (this.activeShadowCameraHelper) {
+      this.viewport.scene.remove(this.activeShadowCameraHelper);
+      this.activeShadowCameraHelper.dispose();
+      this.activeShadowCameraHelper = null;
+    }
+
+    if (!entity || entity.type !== 'light') return;
+    const light = entity as import('./types/entities').LightEntity;
+    if (!light.castShadows) return;
+
+    const mesh = this.meshMap.get(entity.id);
+    const lightInst = mesh?.userData.lightInstance as THREE.Light | undefined;
+    if (lightInst?.shadow?.camera) {
+      // Ensure shadow map is allocated so the camera frustum is correct
+      const res = light.shadowResolution ?? 1024;
+      lightInst.castShadow = true;
+      lightInst.shadow.mapSize.set(res, res);
+      lightInst.shadow.bias = light.shadowBias ?? 0;
+      lightInst.shadow.normalBias = light.shadowNormalBias ?? 0.15;
+      lightInst.shadow.radius = light.shadowRadius ?? 1;
+      const shadowCam = lightInst.shadow.camera as THREE.PerspectiveCamera | THREE.OrthographicCamera;
+      (shadowCam as any).updateProjectionMatrix?.();
+
+      this.activeShadowCameraHelper = new THREE.CameraHelper(lightInst.shadow.camera);
+      this.viewport.scene.add(this.activeShadowCameraHelper);
+    }
+  }
+
+  /**
+   * Toggles Solo Mode for the given light entity ID.
+   * When active, all other THREE.Light instances in the scene are hidden.
+   */
+  private toggleLightSolo(entityId: string) {
+    if (this.soloLightEntityId === entityId) {
+      // Second click on same light → exit solo
+      this.soloLightEntityId = null;
+      this.applyLightSolo(null);
+    } else {
+      this.soloLightEntityId = entityId;
+      this.applyLightSolo(entityId);
+    }
+  }
+
+  private applyLightSolo(soloId: string | null) {
+    this.meshMap.forEach((mesh, eid) => {
+      const lightInst = mesh.userData.lightInstance as THREE.Light | undefined;
+      if (!lightInst) return;
+      lightInst.visible = soloId === null || eid === soloId;
+    });
   }
 
   /**

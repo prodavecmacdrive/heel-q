@@ -14,7 +14,8 @@ export type EntityType =
   | 'door';
 
 export type PrimitiveGeometry = 'cube' | 'sphere' | 'plane' | 'cylinder' | 'cone';
-export type LightType = 'point' | 'directional' | 'spot';
+export type LightType = 'point' | 'directional' | 'spot' | 'rect_area';
+export type FlickerMode = 'none' | 'pattern' | 'random';
 export type BlendMode = 'normal' | 'additive' | 'multiply';
 export type BillboardMode = 'fixed' | 'face_camera' | 'y_axis';
 export type TriggerShape = 'box' | 'sphere';
@@ -123,7 +124,31 @@ export interface LightEntity extends BaseEntity {
   color: string;
   intensity: number;
   distance: number;
+  decay: number;
+  // Spotlight-specific
+  angle: number;         // degrees (0–90)
+  penumbra: number;      // 0–1 edge softness
+  // Target point for spot / directional
+  targetPosition: Vec3;
+  // Shadow settings
   castShadows: boolean;
+  shadowResolution: number;   // 256 | 512 | 1024 | 2048
+  shadowBias: number;
+  shadowNormalBias: number;
+  shadowRadius: number;
+  // Cookie / gobo projected texture
+  cookieTexture: string;
+  // Flicker
+  flickerMode: FlickerMode;
+  flickerSpeed: number;
+  flickerAmplitude: number;
+  // Flicker smoothing: 0 = instant, >0 = smoother transitions (seconds^-1)
+  flickerDecay?: number;
+  // Binary pattern describing on(1)/off(0) sequence, serialized as JSON string
+  flickerPattern?: string;
+  // RectArea specific
+  rectWidth: number;
+  rectHeight: number;
 }
 
 export interface SoundEntity extends BaseEntity {
@@ -258,7 +283,7 @@ export function createDefaultEntity(type: EntityType, name?: string): EditorEnti
       return { ...base, type: 'camera', fov: 45, orthoSize: 10, near: 0.1, far: 100, isDefault: false, targetLookAt: '' };
 
     case 'light':
-      return { ...base, type: 'light', lightType: 'point', color: '#ffffff', intensity: 1, distance: 10, castShadows: false };
+      return { ...base, type: 'light', lightType: 'point', color: '#ffffff', intensity: 1, distance: 10, decay: 2, angle: 45, penumbra: 0, targetPosition: { x: 0, y: 0, z: 0 }, castShadows: false, shadowResolution: 1024, shadowBias: 0, shadowNormalBias: 0.15, shadowRadius: 1, cookieTexture: '', flickerMode: 'none', flickerSpeed: 1, flickerAmplitude: 0.1, flickerDecay: 0.5, flickerPattern: '[0,1,0,1]', rectWidth: 1, rectHeight: 1 };
 
     case 'sound':
       return { ...base, type: 'sound', audioSource: '', volume: 1, loop: true, spatialAudio: true, refDistance: 1, maxDistance: 20 };

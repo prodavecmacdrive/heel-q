@@ -88,14 +88,14 @@
           "type": "light",
           "transform": {
             "position": {
-              "x": -0.924,
-              "y": 3.227,
-              "z": -1.455
+              "x": 1.037,
+              "y": 2.856,
+              "z": -0.314
             },
             "rotation": {
-              "x": 31.88,
-              "y": 30.04,
-              "z": 20.55
+              "x": -43.97,
+              "y": 62.71,
+              "z": -162.37
             },
             "scale": {
               "x": 1,
@@ -105,11 +105,31 @@
           },
           "visible": true,
           "layer": 0,
-          "lightType": "point",
-          "color": "#ffffff",
-          "intensity": 91,
-          "distance": 50,
-          "castShadows": true
+          "lightType": "spot",
+          "color": "#e00000",
+          "intensity": 20,
+          "distance": 100,
+          "castShadows": true,
+          "decay": 2.2,
+          "shadowBias": -0.0016,
+          "shadowResolution": "256",
+          "flickerMode": "pattern",
+          "flickerSpeed": 43.3,
+          "shadowRadius": 4.8,
+          "shadowNormalBias": 0.05,
+          "penumbra": 0.5,
+          "rectWidth": 4,
+          "flickerAmplitude": 0.63,
+          "angle": 32,
+          "targetPosition": {
+            "x": -3.1,
+            "y": 0.487,
+            "z": -4.698
+          },
+          "cookieTexture": "",
+          "attenuationSpeed": 4.6,
+          "flickerDecay": 0,
+          "flickerPattern": "[0,1,0,0,0,0,0,0,0,0,1,0,1]"
         },
         {
           "id": "primitive_mo55byp6_1",
@@ -279,7 +299,7 @@
           "playbackSpeed": 1,
           "sequenceLoop": true,
           "sequenceAutoplay": true,
-          "castShadows": false,
+          "castShadows": true,
           "receiveShadows": true
         },
         {
@@ -389,6 +409,55 @@
           "worldDoorId": "door_1777497571191",
           "castShadow": false,
           "receiveShadow": true
+        },
+        {
+          "id": "light_momawrbd_1",
+          "name": "New light",
+          "type": "light",
+          "transform": {
+            "position": {
+              "x": -2,
+              "y": 1.632,
+              "z": -1.252
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            }
+          },
+          "visible": true,
+          "layer": 0,
+          "lightType": "point",
+          "color": "#ffffff",
+          "intensity": 10.2,
+          "distance": 10,
+          "decay": 2,
+          "angle": 45,
+          "penumbra": 0,
+          "targetPosition": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "castShadows": true,
+          "shadowResolution": 1024,
+          "shadowBias": 0,
+          "shadowNormalBias": 0.15,
+          "shadowRadius": 1,
+          "cookieTexture": "",
+          "flickerMode": "none",
+          "flickerSpeed": 1,
+          "flickerAmplitude": 0.1,
+          "flickerDecay": 0.5,
+          "flickerPattern": "[0,1,0,1]",
+          "rectWidth": 1,
+          "rectHeight": 1
         }
       ],
       "spawnPoints": [

@@ -25,8 +25,8 @@ import { HistoryManager } from './editor/HistoryManager';
 const GRID_SNAP = 0.5;
 const ROTATION_SNAP_DEGREES = 15;
 
-import type { EditorEntity, EntityType, PrimitiveEntity, CameraEntity, DoorEntity, SpawnEntity } from './types/entities';
-import { createDefaultEntity } from './types/entities';
+import type { EditorEntity, EntityType, SpriteEntity, PrimitiveEntity, CameraEntity, DoorEntity, SpawnEntity, ArchetypeSchema, ArchetypeInstanceEntity } from './types/entities';
+import { createDefaultEntity, createDefaultArchetypeInstance } from './types/entities';
 import type { WorldProject, RoomData } from './types/scene';
 import { createDefaultWorld } from './types/scene';
 
@@ -75,6 +75,10 @@ export class EditorApp {
   // ── Serialization ──
   private serializer: SceneSerializer = new SceneSerializer();
 
+  // ── Archetype system ──
+  private archetypeSchema: ArchetypeSchema | null = null;
+  private archetypeEditorPanel: import('./ui/ArchetypeEditorPanel').ArchetypeEditorPanel | null = null;
+
   // ── Room meshes ──
   private roomGroup = new THREE.Group();
   private floorMesh: THREE.Mesh | null = null;
@@ -97,7 +101,7 @@ export class EditorApp {
     this.world = createDefaultWorld();
   }
 
-  public init() {
+  public async init() {
     const canvas = document.getElementById('viewport-canvas') as HTMLCanvasElement;
     const container = document.getElementById('viewport-container') as HTMLElement;
 
@@ -314,6 +318,8 @@ export class EditorApp {
 
     // ── Selection change ──
     this.selection.onSelectionChange((entityId) => {
+      this.updateLightEditorVisuals(entityId);
+
       if (entityId) {
         const entity = this.entityMap.get(entityId);
         this.rightPanel.inspectEntity(entity ?? null);
@@ -345,6 +351,7 @@ export class EditorApp {
         this.rightPanel.inspectEntity(null);
         this.gizmo.detach();
         this.activeLightTargetEntityId = null;
+        this.updateLightEditorVisuals(null);
         this.updateShadowCameraHelper(null);
       }
     });
@@ -372,21 +379,17 @@ export class EditorApp {
     });
 
     this.viewport.onRender(() => {
+      this.updateBillboards();
       this.selection.update();
+      this.cameraPreview.syncPreview(this.currentMode === 'room');
     });
 
     // ── Camera Preview Panel ──
-    this.cameraPreview = new CameraPreviewPanel(
-      container,
-      this.viewport.renderer,
-      this.viewport.scene,
-    );
-    this.viewport.onPostRender(() => {
-      this.cameraPreview.render();
-    });
+    this.cameraPreview = new CameraPreviewPanel(container);
 
     this.setupKeyboardShortcuts();
 
+    await this.fetchArchetypeSchema();
     this.tryRestoreWorld();
     this.fetchAndSetAssets();
     
@@ -399,11 +402,45 @@ export class EditorApp {
 
   // ═══════════════════════════════════════════════════════════════════
 
-  private handleModeChange(mode: EditorMode) {
+  private async handleModeChange(mode: EditorMode) {
     this.currentMode = mode;
     this.selection.deselect();
     this.leftPanel.setMode(mode);
     this.rightPanel.inspectEntity(null);
+
+    // Archetypes editor mode — show overlay, hide viewport UI
+    if (mode === 'archetypes') {
+      this.worldMapCtrl.deactivate();
+      this.heightMapCtrl.deactivate();
+      this.gizmo.detach();
+      (document.getElementById('left-panel') as HTMLElement).style.visibility = 'hidden';
+      (document.getElementById('right-panel') as HTMLElement).style.visibility = 'hidden';
+      (document.getElementById('viewport-container') as HTMLElement).style.visibility = 'hidden';
+
+      if (!this.archetypeEditorPanel) {
+        const { ArchetypeEditorPanel } = await import('./ui/ArchetypeEditorPanel');
+        this.archetypeEditorPanel = new ArchetypeEditorPanel(
+          document.getElementById('editor-body')!,
+          async (schema) => {
+            this.archetypeSchema = schema;
+            this.bottomPanel.refreshObjects(schema);
+            this.factory.setArchetypeSchema(schema);
+            this.rightPanel.setArchetypeSchema(schema);
+          }
+        );
+      }
+      this.archetypeEditorPanel.show(this.archetypeSchema ?? { archetypes: {} });
+      return;
+    }
+
+    // Leaving archetypes mode — restore visibility, hide panel
+    this.archetypeEditorPanel?.hide();
+    const leftPanelEl = document.getElementById('left-panel') as HTMLElement | null;
+    const rightPanelEl = document.getElementById('right-panel') as HTMLElement | null;
+    const viewportEl = document.getElementById('viewport-container') as HTMLElement | null;
+    if (leftPanelEl) leftPanelEl.style.visibility = '';
+    if (rightPanelEl) rightPanelEl.style.visibility = '';
+    if (viewportEl) viewportEl.style.visibility = '';
 
     if (mode === 'world') {
       this.selection.enabled = false;
@@ -834,6 +871,19 @@ export class EditorApp {
     this.gizmo.transformControls.setSpace('world');
   }
 
+  private updateLightEditorVisuals(selectedEntityId: string | null): void {
+    for (const [id, mesh] of this.meshMap) {
+      const helper = mesh.userData.lightHelper as THREE.Object3D | undefined;
+      const targetSphere = mesh.userData.targetSphere as THREE.Object3D | undefined;
+      const targetLine = mesh.userData.targetLine as THREE.Object3D | undefined;
+      const isSelectedLight = id === selectedEntityId && this.entityMap.get(id)?.type === 'light';
+
+      if (helper) helper.visible = Boolean(isSelectedLight);
+      if (targetSphere) targetSphere.visible = Boolean(isSelectedLight);
+      if (targetLine) targetLine.visible = Boolean(isSelectedLight);
+    }
+  }
+
   private handleEntityChange(entity: EditorEntity) {
     const mesh = this.meshMap.get(entity.id);
     if (!mesh) return;
@@ -952,14 +1002,60 @@ export class EditorApp {
 
     this.captureHistory();
 
-    const entity = createDefaultEntity(dragData.entityType as EntityType);
+    // Handle archetype instance placement
+    if (dragData.entityType === 'archetype_instance' && dragData.archetypeId) {
+      const archId = dragData.archetypeId;
+      const archetype = this.archetypeSchema?.archetypes[archId];
+      if (!archetype) {
+        this.toast(`Unknown archetype: ${archId}`, 'error');
+        return;
+      }
+      const entity = createDefaultArchetypeInstance(archId, archetype);
+      const target = this.viewport.controls.target;
+      entity.transform.position.x = Math.round(target.x * 2) / 2;
+      entity.transform.position.z = Math.round(target.z * 2) / 2;
+      const obj = this.addEntity(entity);
+      this.selection.select(obj);
+      this.toast(`Added ${archId}`, 'success');
+      return;
+    }
+
+    const entity = this.createEntityFromDragData(dragData);
     const target = this.viewport.controls.target;
     entity.transform.position.x = Math.round(target.x * 2) / 2;
     entity.transform.position.z = Math.round(target.z * 2) / 2;
 
+    const obj = this.addEntity(entity);
+    this.selection.select(obj);
+    this.toast(`Added ${entity.type}`, 'success');
+  }
+
+  private createEntityFromDragData(dragData: DragData): EditorEntity {
+    const isTextureAsset = dragData.assetPath && this.isTextureAssetPath(dragData.assetPath);
+
+    // textures/ assets → primitive plane (engine respects full 3D transform)
+    if (isTextureAsset && dragData.assetPath!.startsWith('textures/')) {
+      const entity = createDefaultEntity('primitive') as PrimitiveEntity;
+      entity.geometryType = 'plane';
+      entity.materialType = 'textured';
+      entity.textureSource = dragData.assetPath!;
+      entity.opacity = 1;
+      return entity;
+    }
+
+    // sprites/ assets → billboard sprite (face_camera)
+    if (isTextureAsset && (dragData.entityType === 'sprite' || dragData.entityType === 'animated_sprite')) {
+      const sprite = createDefaultEntity('sprite') as SpriteEntity;
+      sprite.textureSource = dragData.assetPath!;
+      sprite.billboardMode = 'face_camera';
+      return sprite;
+    }
+
+    const entity = createDefaultEntity(dragData.entityType as EntityType);
+
     if (entity.type === 'primitive' && dragData.subType) {
       (entity as PrimitiveEntity).geometryType = dragData.subType as any;
-      // If asset path provided, apply texture
+      // If asset path provided, apply texture when a primitive is intended
       if (dragData.assetPath) {
         (entity as PrimitiveEntity).materialType = 'textured';
         (entity as PrimitiveEntity).textureSource = dragData.assetPath;
@@ -976,9 +1072,26 @@ export class EditorApp {
       (entity as DoorEntity).materialType = 'textured';
     }
 
-    const obj = this.addEntity(entity);
-    this.selection.select(obj);
-    this.toast(`Added ${entity.type}`, 'success');
+    return entity;
+  }
+
+  private isTextureAssetPath(path?: string): boolean {
+    return !!path && !!path.match(/\.(png|jpe?g|webp)$/i);
+  }
+
+  private updateBillboards() {
+    const cameraPosition = this.viewport.activeCamera.position;
+    for (const mesh of this.meshMap.values()) {
+      const mode = mesh.userData?.billboardMode as string | undefined;
+      if (!mode || mode === 'fixed') continue;
+      if (mode === 'face_camera') {
+        mesh.lookAt(cameraPosition);
+      } else if (mode === 'y_axis') {
+        const target = cameraPosition.clone();
+        target.y = mesh.position.y;
+        mesh.lookAt(target);
+      }
+    }
   }
 
   private setupDragDrop(container: HTMLElement) {
@@ -1000,21 +1113,25 @@ export class EditorApp {
       pos.x = Math.round(pos.x * 2) / 2;
       pos.z = Math.round(pos.z * 2) / 2;
 
-      const entity = createDefaultEntity(dragData.entityType as EntityType);
+      // Handle archetype instance drop
+      if (dragData.entityType === 'archetype_instance' && dragData.archetypeId) {
+        const archId = dragData.archetypeId;
+        const archetype = this.archetypeSchema?.archetypes[archId];
+        if (archetype) {
+          const entity = createDefaultArchetypeInstance(archId, archetype);
+          entity.transform.position.x = pos.x;
+          entity.transform.position.z = pos.z;
+          const obj = this.addEntity(entity);
+          this.selection.select(obj);
+          this.toast(`Added ${archId}`, 'success');
+        }
+        return;
+      }
+
+      const entity = this.createEntityFromDragData(dragData);
       entity.transform.position.x = pos.x;
       entity.transform.position.z = pos.z;
 
-      if (entity.type === 'primitive' && dragData.subType) {
-        (entity as PrimitiveEntity).geometryType = dragData.subType as any;
-        if (dragData.assetPath) {
-          (entity as PrimitiveEntity).materialType = 'textured';
-          (entity as PrimitiveEntity).textureSource = dragData.assetPath;
-        }
-      }
-      if (entity.type === 'door' && dragData.assetPath) {
-        (entity as DoorEntity).textureSource = dragData.assetPath;
-        (entity as DoorEntity).materialType = 'textured';
-      }
       const obj = this.addEntity(entity);
       this.selection.select(obj);
       this.toast(`Added ${entity.type}`, 'success');
@@ -1631,7 +1748,7 @@ export class EditorApp {
       const selectedId = this.selection.selectedObject?.userData?.entityId as string | undefined;
       this.rightPanel.updateEntityList(this.activeRoom?.entities ?? [], selectedId);
     }
-    this.cameraPreview.updateCameraList(this.activeRoom?.entities ?? []);
+    this.cameraPreview.updateCameraList(this.activeRoom?.id ?? null, this.activeRoom?.entities ?? []);
   }
 
   /** Fetch asset list from the dev server and pass it to the inspector */
@@ -1643,5 +1760,23 @@ export class EditorApp {
         this.rightPanel.setAssets(data);
       }
     } catch { /* assets are optional */ }
+  }
+
+  private async fetchArchetypeSchema(): Promise<void> {
+    try {
+      const res = await fetch('/api/archetypes');
+      if (res.ok) {
+        this.archetypeSchema = await res.json() as ArchetypeSchema;
+        this.bottomPanel.refreshObjects(this.archetypeSchema);
+        this.factory.setArchetypeSchema(this.archetypeSchema);
+        this.rightPanel.setArchetypeSchema(this.archetypeSchema);
+      }
+    } catch (e) {
+      console.warn('Failed to fetch archetype schema:', e);
+    }
+  }
+
+  public async refreshArchetypeSchema(): Promise<void> {
+    await this.fetchArchetypeSchema();
   }
 }

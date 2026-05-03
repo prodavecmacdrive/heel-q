@@ -65,6 +65,10 @@ export class Engine {
         await this.roomManager.loadRoom(room);
     }
 
+    public getCameraSystem(): CameraSystem | undefined {
+        return this.world.getSystem(CameraSystem);
+    }
+
     public start() {
         // ── System registration order ──
         // 1. Input (event-driven, registered first)

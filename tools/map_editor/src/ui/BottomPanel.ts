@@ -2,14 +2,15 @@
    BottomPanel — Content Browser (Assets / 3D Primitives / Functional)
    ═══════════════════════════════════════════════════════════════════════ */
 
-import type { EntityType, PrimitiveGeometry } from '../types/entities';
+import type { EntityType, PrimitiveGeometry, ArchetypeSchema } from '../types/entities';
 
-export type BrowserTab = 'assets' | 'primitives' | 'functional';
+export type BrowserTab = 'assets' | 'primitives' | 'functional' | 'objects';
 
 export interface DragData {
   entityType: EntityType;
   subType?: string;
   assetPath?: string;
+  archetypeId?: string;
 }
 
 export interface AssetData {
@@ -22,6 +23,15 @@ export class BottomPanel {
   private container: HTMLElement;
   private currentTab: BrowserTab = 'primitives';
   private addEntityCallback: ((data: DragData) => void) | null = null;
+  private archetypeSchema: ArchetypeSchema | null = null;
+
+  /** Update the schema used for the Objects tab. Refreshes the tab if currently shown. */
+  public refreshObjects(schema: ArchetypeSchema | null) {
+    this.archetypeSchema = schema;
+    if (this.currentTab === 'objects') {
+      this.renderTabContent();
+    }
+  }
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -56,6 +66,12 @@ export class BottomPanel {
             <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
           </svg>
           Functional
+        </button>
+        <button class="browser-tab" data-tab="objects" id="browser-tab-objects">
+          <svg class="browser-tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/>
+          </svg>
+          Objects
         </button>
       </div>
       <div class="browser-content" id="browser-content"></div>
@@ -94,6 +110,9 @@ export class BottomPanel {
       case 'functional':
         content.innerHTML = this.renderFunctionalTab();
         break;
+      case 'objects':
+        content.innerHTML = this.renderObjectsTab();
+        break;
     }
 
     // Make cards draggable + double-click to add
@@ -104,18 +123,21 @@ export class BottomPanel {
           entityType: el.dataset.entityType as EntityType,
           subType: el.dataset.subType || undefined,
           assetPath: el.dataset.assetPath || undefined,
+          archetypeId: el.dataset.archetypeId || undefined,
         };
         (e as DragEvent).dataTransfer!.setData('application/json', JSON.stringify(dragData));
         (e as DragEvent).dataTransfer!.effectAllowed = 'copy';
       });
 
-      // Double-click fallback: add entity at origin
+      // Double-click fallback: add entity at orbit target
       card.addEventListener('dblclick', () => {
         if (!this.addEntityCallback) return;
         const el = card as HTMLElement;
         this.addEntityCallback({
           entityType: el.dataset.entityType as EntityType,
           subType: el.dataset.subType || undefined,
+          assetPath: el.dataset.assetPath || undefined,
+          archetypeId: el.dataset.archetypeId || undefined,
         });
       });
     });
@@ -152,7 +174,7 @@ export class BottomPanel {
         const name = file.replace(/\.[^/.]+$/, '');
         cards.push(`
           <div class="browser-card" draggable="true"
-               data-entity-type="primitive" data-sub-type="cube" data-asset-path="textures/${file}">
+               data-entity-type="primitive" data-sub-type="plane" data-asset-path="textures/${file}">
             <div class="browser-card-icon" style="background:linear-gradient(135deg, #3a6b9f, #2a5b8f)">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>
@@ -326,6 +348,52 @@ export class BottomPanel {
         </div>
       `).join('')}
     </div>`;
+  }
+
+  private renderObjectsTab(): string {
+    const schema = this.archetypeSchema;
+    if (!schema) {
+      return `<div style="padding: 20px; color: var(--text-muted);">Loading archetypes...</div>`;
+    }
+
+    const categoryColors: Record<string, string> = {
+      Container: '#58a6ff',
+      LightSource: '#ccaa44',
+      Pickable_Tool: '#4a8a5f',
+      Pickable_Vessel: '#4a7a8f',
+      Mechanism_Source: '#7a5aaa',
+    };
+
+    const cards: string[] = [];
+    for (const [id, arch] of Object.entries(schema.archetypes)) {
+      // Skip system archetypes — they have dedicated panel tabs
+      if (id.startsWith('_sys:')) continue;
+      const color = categoryColors[arch.category] || '#58a6ff';
+      // Use first asset_select property default as thumbnail hint
+      const textureProp = arch.properties.find(p => p.type === 'asset_select');
+      const thumbHint = textureProp?.default as string || '';
+      cards.push(`
+        <div class="browser-card" draggable="true"
+             data-entity-type="archetype_instance"
+             data-archetype-id="${id}"
+             id="arch-card-${id.toLowerCase().replace(/\s+/g, '-')}">
+          <div class="browser-card-icon" style="background:linear-gradient(135deg, ${color}44, ${color}22); border: 1px solid ${color}66; position:relative">
+            <svg viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="1.5">
+              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/>
+            </svg>
+            ${thumbHint ? `<div style="position:absolute;bottom:2px;right:2px;font-size:7px;color:${color};opacity:0.7;overflow:hidden;max-width:40px;text-overflow:ellipsis;white-space:nowrap">${thumbHint}</div>` : ''}
+          </div>
+          <span class="browser-card-label">${id}</span>
+          <span class="browser-card-tag" style="background:${color}22;color:${color};border:1px solid ${color}44">${arch.category.replace(/_/g, ' ')}</span>
+        </div>
+      `);
+    }
+
+    if (cards.length === 0) {
+      return `<div style="padding: 20px; color: var(--text-muted);">No custom object types. Use the <b>Archetypes</b> mode to create them.</div>`;
+    }
+
+    return `<div class="browser-grid">${cards.join('')}</div>`;
   }
 
   private darken(hex: string): string {

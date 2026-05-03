@@ -1,5 +1,5 @@
 {
-  "version": "1.0.0",
+  "version": "2.0.0",
   "projectId": "new_world",
   "rooms": [
     {
@@ -53,135 +53,66 @@
       ],
       "entities": [
         {
-          "id": "camera_mo3on6df_4",
-          "name": "New camera",
-          "type": "camera",
+          "id": "light_momawrbd_1",
+          "name": "New light",
+          "type": "archetype_instance",
+          "archetypeId": "_sys:Light",
           "transform": {
             "position": {
-              "x": 0.019,
-              "y": 3.396,
-              "z": 0.865
+              "x": -3.198,
+              "y": 1.433,
+              "z": 2.773
             },
             "rotation": {
-              "x": -20,
+              "x": -154.39,
+              "y": 76.19,
+              "z": -169.94
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            }
+          },
+          "visible": true,
+          "layer": 0,
+          "overrides": {
+            "lightType": "spot",
+            "color": "#b3bad6",
+            "intensity": 30,
+            "distance": 20,
+            "decay": 2,
+            "angle": 45,
+            "penumbra": 0,
+            "targetPosition": {
+              "x": 0,
               "y": 0,
               "z": 0
             },
-            "scale": {
-              "x": 1,
-              "y": 1,
-              "z": 1
-            }
-          },
-          "visible": true,
-          "layer": 11,
-          "fov": 55,
-          "orthoSize": 10,
-          "near": 0.1,
-          "far": 100,
-          "isDefault": false,
-          "targetLookAt": ""
+            "castShadows": true,
+            "shadowResolution": 1024,
+            "shadowBias": 0,
+            "shadowNormalBias": 0.15,
+            "shadowRadius": 1,
+            "cookieTexture": "",
+            "flickerMode": "pattern",
+            "flickerSpeed": 21,
+            "flickerAmplitude": 61.1,
+            "flickerDecay": 10.5,
+            "flickerPattern": "[0,1,0,0,0,0,1,0,0,0,1,1,1]",
+            "rectWidth": 1,
+            "rectHeight": 1
+          }
         },
         {
-          "id": "light_mo3oq4y9_7",
-          "name": "New light",
-          "type": "light",
-          "transform": {
-            "position": {
-              "x": 1.037,
-              "y": 2.856,
-              "z": -0.314
-            },
-            "rotation": {
-              "x": -43.97,
-              "y": 62.71,
-              "z": -162.37
-            },
-            "scale": {
-              "x": 1,
-              "y": 1,
-              "z": 1
-            }
-          },
-          "visible": true,
-          "layer": 0,
-          "lightType": "spot",
-          "color": "#e00000",
-          "intensity": 20,
-          "distance": 100,
-          "castShadows": true,
-          "decay": 2.2,
-          "shadowBias": -0.0016,
-          "shadowResolution": "256",
-          "flickerMode": "pattern",
-          "flickerSpeed": 43.3,
-          "shadowRadius": 4.8,
-          "shadowNormalBias": 0.05,
-          "penumbra": 0.5,
-          "rectWidth": 4,
-          "flickerAmplitude": 0.63,
-          "angle": 32,
-          "targetPosition": {
-            "x": -3.1,
-            "y": 0.487,
-            "z": -4.698
-          },
-          "cookieTexture": "",
-          "attenuationSpeed": 4.6,
-          "flickerDecay": 0,
-          "flickerPattern": "[0,1,0,0,0,0,0,0,0,0,1,0,1]"
-        },
-        {
-          "id": "primitive_mo55byp6_1",
-          "name": "New primitive",
-          "type": "primitive",
-          "transform": {
-            "position": {
-              "x": -1.5,
-              "y": 0.744,
-              "z": -3.5
-            },
-            "rotation": {
-              "x": 5.44,
-              "y": 15,
-              "z": 12.71
-            },
-            "scale": {
-              "x": 1,
-              "y": 1,
-              "z": 1
-            }
-          },
-          "visible": true,
-          "layer": 0,
-          "geometryType": "sphere",
-          "materialType": "textured",
-          "color": "#808080",
-          "isCollider": true,
-          "opacity": 1,
-          "textureSource": "",
-          "uvTilingX": 1,
-          "uvTilingY": 1,
-          "uvOffsetX": 0,
-          "uvOffsetY": 0,
-          "sequenceSource": "",
-          "sequenceJson": "",
-          "activeAnimation": "",
-          "playbackSpeed": 1,
-          "sequenceLoop": true,
-          "sequenceAutoplay": true,
-          "castShadows": true,
-          "receiveShadows": true
-        },
-        {
-          "id": "spawn_mo55l819_1",
+          "id": "spawn_monqpsl7_3",
           "name": "New spawn",
           "type": "spawn",
           "transform": {
             "position": {
-              "x": -4,
-              "y": 0,
-              "z": -3
+              "x": 0.188,
+              "y": 0.042,
+              "z": -3.736
             },
             "rotation": {
               "x": 0,
@@ -204,8 +135,8 @@
           },
           "characterSpeed": 3,
           "characterAsset": "",
-          "characterSequenceSource": "assets\\sprites\\customer.png",
-          "characterSequenceJson": "assets\\sprites\\customer.json",
+          "characterSequenceSource": "sprites/customer.png",
+          "characterSequenceJson": "sprites/customer.json",
           "characterSequenceFps": 12,
           "characterSequenceLoop": true,
           "characterSequenceAutoplay": true,
@@ -219,167 +150,23 @@
           "characterReceiveShadow": true
         },
         {
-          "id": "primitive_mogh1hu4_1",
-          "name": "New primitive",
-          "type": "primitive",
-          "transform": {
-            "position": {
-              "x": 0.5,
-              "y": 0.801,
-              "z": -2.085
-            },
-            "rotation": {
-              "x": -10.09,
-              "y": 30,
-              "z": 16.73
-            },
-            "scale": {
-              "x": 0.5,
-              "y": 1,
-              "z": 1
-            }
-          },
-          "visible": true,
-          "layer": 0,
-          "geometryType": "plane",
-          "materialType": "textured",
-          "color": "#808080",
-          "isCollider": true,
-          "opacity": 0.99,
-          "textureSource": "textures/building.png",
-          "uvTilingX": 1,
-          "uvTilingY": 1,
-          "uvOffsetX": 0,
-          "uvOffsetY": 0,
-          "sequenceSource": "",
-          "sequenceJson": "",
-          "activeAnimation": "",
-          "playbackSpeed": 1,
-          "sequenceLoop": true,
-          "sequenceAutoplay": true,
-          "castShadows": false,
-          "receiveShadows": true
-        },
-        {
-          "id": "primitive_mogj5pig_1",
-          "name": "New primitive",
-          "type": "primitive",
-          "transform": {
-            "position": {
-              "x": 0,
-              "y": 1.621,
-              "z": -4.5
-            },
-            "rotation": {
-              "x": 5.32,
-              "y": 0,
-              "z": -44.4
-            },
-            "scale": {
-              "x": 1,
-              "y": 1,
-              "z": 1
-            }
-          },
-          "visible": true,
-          "layer": 0,
-          "geometryType": "cube",
-          "materialType": "color",
-          "color": "#808080",
-          "isCollider": true,
-          "opacity": 0.5,
-          "textureSource": "",
-          "uvTilingX": 1,
-          "uvTilingY": 1,
-          "uvOffsetX": 0,
-          "uvOffsetY": 0,
-          "sequenceSource": "",
-          "sequenceJson": "",
-          "activeAnimation": "",
-          "playbackSpeed": 1,
-          "sequenceLoop": true,
-          "sequenceAutoplay": true,
-          "castShadows": true,
-          "receiveShadows": true
-        },
-        {
-          "id": "camera_mojcdtas_1",
-          "name": "New camera",
-          "type": "camera",
-          "transform": {
-            "position": {
-              "x": -5,
-              "y": 3.875,
-              "z": 1.166
-            },
-            "rotation": {
-              "x": -23.43,
-              "y": -20.57,
-              "z": 0
-            },
-            "scale": {
-              "x": 1,
-              "y": 1,
-              "z": 1
-            }
-          },
-          "visible": true,
-          "layer": 0,
-          "fov": 45,
-          "orthoSize": 10,
-          "near": 0.1,
-          "far": 100,
-          "isDefault": false,
-          "targetLookAt": ""
-        },
-        {
-          "id": "camera_moje5wp7_1",
-          "name": "New camera",
-          "type": "camera",
-          "transform": {
-            "position": {
-              "x": 0,
-              "y": 2.543,
-              "z": -5
-            },
-            "rotation": {
-              "x": -170.06,
-              "y": 19.96,
-              "z": -180
-            },
-            "scale": {
-              "x": 1,
-              "y": 1,
-              "z": 1
-            }
-          },
-          "visible": true,
-          "layer": 0,
-          "fov": 45,
-          "orthoSize": 10,
-          "near": 0.1,
-          "far": 100,
-          "isDefault": false,
-          "targetLookAt": ""
-        },
-        {
-          "id": "door_1777497571191_room_1776477096922",
+          "id": "door_1777690093242_room_1776477096922",
           "name": "Door",
           "type": "door",
           "transform": {
             "position": {
-              "x": -1.684,
+              "x": -1.9947369823601282,
               "y": 0,
-              "z": -6.259
+              "z": -6.19044581371981
             },
             "rotation": {
               "x": 0,
-              "y": -171.87,
+              "y": -171.17,
               "z": 0
             },
             "scale": {
-              "x": 1.706,
-              "y": 1.936,
+              "x": 1.635,
+              "y": 2.5,
               "z": 0.35
             }
           },
@@ -402,23 +189,23 @@
           "playbackSpeed": 1,
           "sequenceLoop": true,
           "sequenceAutoplay": true,
-          "wallDirX": -0.9899494936611666,
-          "wallDirZ": 0.14142135623730936,
-          "wallAnchorX": -1.683869346733228,
-          "wallAnchorZ": -6.259447236180968,
-          "worldDoorId": "door_1777497571191",
+          "wallDirX": -0.9881604816024017,
+          "wallDirZ": 0.15342380062855168,
+          "wallAnchorX": -1.9947369823601282,
+          "wallAnchorZ": -6.19044581371981,
+          "worldDoorId": "door_1777690093242",
           "castShadow": false,
           "receiveShadow": true
         },
         {
-          "id": "light_momawrbd_1",
-          "name": "New light",
-          "type": "light",
+          "id": "primitive_monsnc3n_3",
+          "name": "New primitive",
+          "type": "primitive",
           "transform": {
             "position": {
-              "x": -2,
-              "y": 1.632,
-              "z": -1.252
+              "x": -3.5,
+              "y": 0.988,
+              "z": -4.5
             },
             "rotation": {
               "x": 0,
@@ -433,40 +220,941 @@
           },
           "visible": true,
           "layer": 0,
-          "lightType": "point",
-          "color": "#ffffff",
-          "intensity": 10.2,
-          "distance": 10,
-          "decay": 2,
-          "angle": 45,
-          "penumbra": 0,
-          "targetPosition": {
-            "x": 0,
-            "y": 0,
-            "z": 0
-          },
+          "geometryType": "plane",
+          "materialType": "textured",
+          "color": "#808080",
+          "isCollider": true,
+          "opacity": 0.99,
+          "textureSource": "textures/key.png",
+          "uvTilingX": 1,
+          "uvTilingY": 1,
+          "uvOffsetX": 0,
+          "uvOffsetY": 0,
+          "sequenceSource": "",
+          "sequenceJson": "",
+          "activeAnimation": "",
+          "playbackSpeed": 1,
+          "sequenceLoop": true,
+          "sequenceAutoplay": true,
           "castShadows": true,
-          "shadowResolution": 1024,
-          "shadowBias": 0,
-          "shadowNormalBias": 0.15,
-          "shadowRadius": 1,
-          "cookieTexture": "",
-          "flickerMode": "none",
-          "flickerSpeed": 1,
-          "flickerAmplitude": 0.1,
-          "flickerDecay": 0.5,
-          "flickerPattern": "[0,1,0,1]",
-          "rectWidth": 1,
-          "rectHeight": 1
+          "receiveShadows": true
+        },
+        {
+          "id": "camera_monyet67_1",
+          "name": "New camera",
+          "type": "camera",
+          "transform": {
+            "position": {
+              "x": -1.69,
+              "y": 1.876,
+              "z": 1.247
+            },
+            "rotation": {
+              "x": -10.94,
+              "y": -0.58,
+              "z": -1.22
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            }
+          },
+          "visible": true,
+          "layer": 0,
+          "fov": 45,
+          "orthoSize": 10,
+          "near": 0.1,
+          "far": 100,
+          "isDefault": false,
+          "targetLookAt": ""
+        },
+        {
+          "id": "camera_moo7b0jq_5",
+          "name": "New camera",
+          "type": "camera",
+          "transform": {
+            "position": {
+              "x": -5.168,
+              "y": 1.331,
+              "z": 0.46
+            },
+            "rotation": {
+              "x": 0,
+              "y": -44,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            }
+          },
+          "visible": true,
+          "layer": 0,
+          "fov": 45,
+          "orthoSize": 10,
+          "near": 0.1,
+          "far": 100,
+          "isDefault": false,
+          "targetLookAt": ""
+        },
+        {
+          "id": "primitive_moo7o15r_6",
+          "name": "New primitive",
+          "type": "primitive",
+          "transform": {
+            "position": {
+              "x": -3.85,
+              "y": 0.524,
+              "z": -1.819
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            }
+          },
+          "visible": true,
+          "layer": 0,
+          "geometryType": "cube",
+          "materialType": "textured",
+          "color": "#808080",
+          "isCollider": true,
+          "opacity": 1,
+          "textureSource": "textures/wood.jpg",
+          "uvTilingX": 1,
+          "uvTilingY": 1,
+          "uvOffsetX": 0,
+          "uvOffsetY": 0,
+          "sequenceSource": "",
+          "sequenceJson": "",
+          "activeAnimation": "",
+          "playbackSpeed": 1,
+          "sequenceLoop": true,
+          "sequenceAutoplay": true,
+          "castShadows": false,
+          "receiveShadows": true
+        },
+        {
+          "id": "arch_mop6g0ds_1",
+          "name": "Lamp",
+          "type": "archetype_instance",
+          "archetypeId": "Lamp",
+          "transform": {
+            "position": {
+              "x": -1,
+              "y": 0.8801354523148686,
+              "z": -3.5
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 0.4347547769109014,
+              "y": 1,
+              "z": 1
+            }
+          },
+          "visible": true,
+          "layer": 0,
+          "overrides": {
+            "Light": {
+              "archetypeId": "LampLight",
+              "transform": {
+                "position": {
+                  "x": 0,
+                  "y": 0.7759228023926801,
+                  "z": 0
+                },
+                "rotation": {
+                  "x": 90.38799665943822,
+                  "y": -3.0650802014420644,
+                  "z": 2.054992311310192
+                },
+                "scale": {
+                  "x": 1,
+                  "y": 1,
+                  "z": 1
+                }
+              },
+              "visible": true,
+              "layer": 0,
+              "overrides": {
+                "color": "#686721",
+                "castShadows": true,
+                "lightType": "spot",
+                "intensity": 11,
+                "distance": 10,
+                "decay": 2,
+                "angle": 45,
+                "penumbra": 0,
+                "targetPosition": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                },
+                "shadowResolution": 1024,
+                "shadowBias": 0,
+                "shadowNormalBias": 0.15,
+                "shadowRadius": 12,
+                "cookieTexture": "",
+                "flickerMode": "pattern",
+                "flickerSpeed": 33,
+                "flickerAmplitude": 60.1,
+                "flickerDecay": 21.5,
+                "flickerPattern": [
+                  0,
+                  1,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0,
+                  0,
+                  1,
+                  0,
+                  1,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  1
+                ],
+                "rectWidth": 1,
+                "rectHeight": 1,
+                "__childTransforms": {
+                  "Light:26f2dfdf-0ed9-43d0-ae74-e717d41d0a2d": {
+                    "position": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "rotation": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "scale": {
+                      "x": 1,
+                      "y": 1,
+                      "z": 1
+                    }
+                  },
+                  "Light:26f2dfdf-0ed9-43d0-ae74-e717d41d0a2d:8a208c53-0618-451a-a031-ae954605f11c": {
+                    "position": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "rotation": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "scale": {
+                      "x": 1,
+                      "y": 1,
+                      "z": 1
+                    }
+                  },
+                  "Light:26f2dfdf-0ed9-43d0-ae74-e717d41d0a2d:672523fe-11ab-4686-a9d7-7075eeae3f66": {
+                    "position": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "rotation": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "scale": {
+                      "x": 1,
+                      "y": 1,
+                      "z": 1
+                    }
+                  },
+                  "Light:26f2dfdf-0ed9-43d0-ae74-e717d41d0a2d:49bb0ac7-1085-42b0-b095-56eb62bd0ff0": {
+                    "position": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "rotation": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "scale": {
+                      "x": 1,
+                      "y": 1,
+                      "z": 1
+                    }
+                  },
+                  "Light:9adb2e68-f394-4b82-9bd0-31285535fb4a": {
+                    "position": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "rotation": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "scale": {
+                      "x": 1,
+                      "y": 1,
+                      "z": 1
+                    }
+                  },
+                  "Light:9adb2e68-f394-4b82-9bd0-31285535fb4a:242a9d0c-0bee-469b-8a20-c1c979ebc6e2": {
+                    "position": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "rotation": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "scale": {
+                      "x": 1,
+                      "y": 1,
+                      "z": 1
+                    }
+                  },
+                  "Light:9adb2e68-f394-4b82-9bd0-31285535fb4a:d497d060-24c4-4eda-be31-8b99f558f83b": {
+                    "position": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "rotation": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "scale": {
+                      "x": 1,
+                      "y": 1,
+                      "z": 1
+                    }
+                  },
+                  "Light:9adb2e68-f394-4b82-9bd0-31285535fb4a:85990ee4-1733-4453-b538-a3fdcf349912": {
+                    "position": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "rotation": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "scale": {
+                      "x": 1,
+                      "y": 1,
+                      "z": 1
+                    }
+                  },
+                  "Light:7ab3b17e-df1f-4dfc-93b7-f4994f7f0ec5": {
+                    "position": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "rotation": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "scale": {
+                      "x": 1,
+                      "y": 1,
+                      "z": 1
+                    }
+                  },
+                  "Light:7ab3b17e-df1f-4dfc-93b7-f4994f7f0ec5:0a1f660d-1f91-4db2-bc01-f9a13a72610a": {
+                    "position": {
+                      "x": null,
+                      "y": null,
+                      "z": null
+                    },
+                    "rotation": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "scale": {
+                      "x": 1,
+                      "y": 1,
+                      "z": 1
+                    }
+                  },
+                  "Light:7ab3b17e-df1f-4dfc-93b7-f4994f7f0ec5:18d70ad1-6b93-4c30-becb-a15f872072eb": {
+                    "position": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "rotation": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "scale": {
+                      "x": 1,
+                      "y": 1,
+                      "z": 1
+                    }
+                  },
+                  "Light:7ab3b17e-df1f-4dfc-93b7-f4994f7f0ec5:8f8c66d5-4aa4-4dcc-b56b-51f41aef7fc2": {
+                    "position": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "rotation": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "scale": {
+                      "x": 1,
+                      "y": 1,
+                      "z": 1
+                    }
+                  },
+                  "Light:7ab3b17e-df1f-4dfc-93b7-f4994f7f0ec5:8f8c66d5-4aa4-4dcc-b56b-51f41aef7fc2:458bf094-e329-4063-867f-0414d2c40d0f": {
+                    "position": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "rotation": {
+                      "x": null,
+                      "y": null,
+                      "z": 0
+                    },
+                    "scale": {
+                      "x": 9.999999999999998,
+                      "y": 9.999999999999998,
+                      "z": 10
+                    }
+                  },
+                  "Light:7ab3b17e-df1f-4dfc-93b7-f4994f7f0ec5:204190f1-27ce-4996-a870-796939aee4f7": {
+                    "position": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "rotation": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "scale": {
+                      "x": 1,
+                      "y": 1,
+                      "z": 1
+                    }
+                  },
+                  "Light:7ab3b17e-df1f-4dfc-93b7-f4994f7f0ec5:93c10ac7-490f-4006-a258-dd51433fe06d": {
+                    "position": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "rotation": {
+                      "x": -89.99999999999999,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "scale": {
+                      "x": 1,
+                      "y": 1,
+                      "z": 1
+                    }
+                  },
+                  "Light:7ab3b17e-df1f-4dfc-93b7-f4994f7f0ec5:93c10ac7-490f-4006-a258-dd51433fe06d:b50f20ca-6281-4c59-9c21-97940344c33c": {
+                    "position": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "rotation": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "scale": {
+                      "x": 1,
+                      "y": 1.85,
+                      "z": 1
+                    }
+                  },
+                  "Light:7ab3b17e-df1f-4dfc-93b7-f4994f7f0ec5:93c10ac7-490f-4006-a258-dd51433fe06d:d3024bc4-5ac9-4583-afeb-17f76427d5a4": {
+                    "position": {
+                      "x": 0,
+                      "y": 2,
+                      "z": 0
+                    },
+                    "rotation": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "scale": {
+                      "x": 0.08,
+                      "y": 0.15,
+                      "z": 0.08
+                    }
+                  },
+                  "Light:7ab3b17e-df1f-4dfc-93b7-f4994f7f0ec5:58274a7b-5b4c-4649-8177-4a8d186d1fd6": {
+                    "position": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "rotation": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "scale": {
+                      "x": 1,
+                      "y": 1,
+                      "z": 1
+                    }
+                  },
+                  "Light:7ab3b17e-df1f-4dfc-93b7-f4994f7f0ec5:d1e46a33-81b6-410b-906c-c5303a033508": {
+                    "position": {
+                      "x": null,
+                      "y": null,
+                      "z": null
+                    },
+                    "rotation": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "scale": {
+                      "x": 1,
+                      "y": 1,
+                      "z": 1
+                    }
+                  },
+                  "Light:18811a76-8e8f-4115-8ed2-8c65496563fc": {
+                    "position": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "rotation": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "scale": {
+                      "x": 1,
+                      "y": 1,
+                      "z": 1
+                    }
+                  },
+                  "Light:18811a76-8e8f-4115-8ed2-8c65496563fc:6ab64333-63da-4cf3-95aa-bd4cb10a32b7": {
+                    "position": {
+                      "x": null,
+                      "y": null,
+                      "z": null
+                    },
+                    "rotation": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "scale": {
+                      "x": 1,
+                      "y": 1,
+                      "z": 1
+                    }
+                  },
+                  "Light:18811a76-8e8f-4115-8ed2-8c65496563fc:c2301835-60b8-4a6a-96b6-26e9dd67bd6d": {
+                    "position": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "rotation": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "scale": {
+                      "x": 1,
+                      "y": 1,
+                      "z": 1
+                    }
+                  },
+                  "Light:18811a76-8e8f-4115-8ed2-8c65496563fc:15aca52c-ea81-4803-a83e-5f814aa01653": {
+                    "position": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "rotation": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "scale": {
+                      "x": 1,
+                      "y": 1,
+                      "z": 1
+                    }
+                  },
+                  "Light:18811a76-8e8f-4115-8ed2-8c65496563fc:15aca52c-ea81-4803-a83e-5f814aa01653:78a0d629-f707-4705-9557-e04edbe137b7": {
+                    "position": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "rotation": {
+                      "x": null,
+                      "y": null,
+                      "z": 0
+                    },
+                    "scale": {
+                      "x": 9.999999999999998,
+                      "y": 9.999999999999998,
+                      "z": 10
+                    }
+                  },
+                  "Light:18811a76-8e8f-4115-8ed2-8c65496563fc:f5fe7e9c-1b57-4c63-b78f-01b36a48e783": {
+                    "position": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "rotation": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "scale": {
+                      "x": 1,
+                      "y": 1,
+                      "z": 1
+                    }
+                  },
+                  "Light:18811a76-8e8f-4115-8ed2-8c65496563fc:4e34438b-e69c-4ebc-bec4-47698f543bf5": {
+                    "position": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "rotation": {
+                      "x": 89.99999999999999,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "scale": {
+                      "x": 1,
+                      "y": 1,
+                      "z": 1
+                    }
+                  },
+                  "Light:18811a76-8e8f-4115-8ed2-8c65496563fc:4e34438b-e69c-4ebc-bec4-47698f543bf5:1401d681-9dcf-4095-8e53-7169e3325066": {
+                    "position": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "rotation": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "scale": {
+                      "x": 1,
+                      "y": 1.85,
+                      "z": 1
+                    }
+                  },
+                  "Light:18811a76-8e8f-4115-8ed2-8c65496563fc:4e34438b-e69c-4ebc-bec4-47698f543bf5:4423c573-6065-41c5-ac54-8e2fe89aded5": {
+                    "position": {
+                      "x": 0,
+                      "y": 2,
+                      "z": 0
+                    },
+                    "rotation": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "scale": {
+                      "x": 0.08,
+                      "y": 0.15,
+                      "z": 0.08
+                    }
+                  },
+                  "Light:18811a76-8e8f-4115-8ed2-8c65496563fc:9540115a-1b61-40d8-bbc5-1290b5ecce3c": {
+                    "position": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "rotation": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "scale": {
+                      "x": 1,
+                      "y": 1,
+                      "z": 1
+                    }
+                  },
+                  "Light:18811a76-8e8f-4115-8ed2-8c65496563fc:8384cf0f-2a94-4a0e-9acc-e1103041c762": {
+                    "position": {
+                      "x": null,
+                      "y": null,
+                      "z": null
+                    },
+                    "rotation": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "scale": {
+                      "x": 1,
+                      "y": 1,
+                      "z": 1
+                    }
+                  },
+                  "Light:adaf7631-a701-47e6-97a0-a1801871b10e": {
+                    "position": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "rotation": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "scale": {
+                      "x": 1,
+                      "y": 1,
+                      "z": 1
+                    }
+                  },
+                  "Light:adaf7631-a701-47e6-97a0-a1801871b10e:4b75c0d0-a87b-4e39-ab10-3d95acb093b1": {
+                    "position": {
+                      "x": null,
+                      "y": null,
+                      "z": null
+                    },
+                    "rotation": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "scale": {
+                      "x": 1,
+                      "y": 1,
+                      "z": 1
+                    }
+                  },
+                  "Light:adaf7631-a701-47e6-97a0-a1801871b10e:2c4b0ef7-652d-4195-8409-47fdf749ff63": {
+                    "position": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "rotation": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "scale": {
+                      "x": 1,
+                      "y": 1,
+                      "z": 1
+                    }
+                  },
+                  "Light:adaf7631-a701-47e6-97a0-a1801871b10e:845c2e14-2675-46b3-9df2-5ff0cbdce4d4": {
+                    "position": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "rotation": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "scale": {
+                      "x": 1,
+                      "y": 1,
+                      "z": 1
+                    }
+                  },
+                  "Light:adaf7631-a701-47e6-97a0-a1801871b10e:845c2e14-2675-46b3-9df2-5ff0cbdce4d4:32ffd1f9-4add-44c4-9ff6-1cdc2ea5057f": {
+                    "position": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "rotation": {
+                      "x": null,
+                      "y": null,
+                      "z": 0
+                    },
+                    "scale": {
+                      "x": 9.999999999999998,
+                      "y": 9.999999999999998,
+                      "z": 10
+                    }
+                  },
+                  "Light:adaf7631-a701-47e6-97a0-a1801871b10e:24dd4cf0-4678-4a82-9fef-16a2599dc0f4": {
+                    "position": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "rotation": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "scale": {
+                      "x": 1,
+                      "y": 1,
+                      "z": 1
+                    }
+                  },
+                  "Light:adaf7631-a701-47e6-97a0-a1801871b10e:d27b3410-a43f-4832-970b-853a1696ea0f": {
+                    "position": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "rotation": {
+                      "x": 89.99999999999999,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "scale": {
+                      "x": 1,
+                      "y": 1,
+                      "z": 1
+                    }
+                  },
+                  "Light:adaf7631-a701-47e6-97a0-a1801871b10e:d27b3410-a43f-4832-970b-853a1696ea0f:1bc3485a-8b2b-4a3d-b706-6b27a13192b7": {
+                    "position": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "rotation": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "scale": {
+                      "x": 1,
+                      "y": 1.85,
+                      "z": 1
+                    }
+                  },
+                  "Light:adaf7631-a701-47e6-97a0-a1801871b10e:d27b3410-a43f-4832-970b-853a1696ea0f:c58733a3-7ec7-4cc1-bcf6-d49f9eeb758e": {
+                    "position": {
+                      "x": 0,
+                      "y": 2,
+                      "z": 0
+                    },
+                    "rotation": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "scale": {
+                      "x": 0.08,
+                      "y": 0.15,
+                      "z": 0.08
+                    }
+                  },
+                  "Light:adaf7631-a701-47e6-97a0-a1801871b10e:6b179daf-ca22-4be3-82fe-dd92f9a7fdab": {
+                    "position": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "rotation": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "scale": {
+                      "x": 1,
+                      "y": 1,
+                      "z": 1
+                    }
+                  },
+                  "Light:adaf7631-a701-47e6-97a0-a1801871b10e:7db59131-88bb-4cf4-be27-fb6adaefcd63": {
+                    "position": {
+                      "x": null,
+                      "y": null,
+                      "z": null
+                    },
+                    "rotation": {
+                      "x": 0,
+                      "y": 0,
+                      "z": 0
+                    },
+                    "scale": {
+                      "x": 1,
+                      "y": 1,
+                      "z": 1
+                    }
+                  }
+                }
+              }
+            }
+          }
         }
       ],
       "spawnPoints": [
         {
           "id": "spawn_default",
           "position": {
-            "x": -4,
-            "y": 0,
-            "z": -3
+            "x": 0.188,
+            "y": 0.042,
+            "z": -3.736
           }
         }
       ],
@@ -540,17 +1228,18 @@
         {
           "id": "camera_mo3oopfe_5",
           "name": "New camera",
-          "type": "camera",
+          "type": "archetype_instance",
+          "archetypeId": "_sys:Camera",
           "transform": {
             "position": {
-              "x": -1.882,
+              "x": -2,
               "y": 3.061,
-              "z": -12.659
+              "z": -12.5
             },
             "rotation": {
-              "x": -165.69,
-              "y": 2.67,
-              "z": 169.04
+              "x": -164.05,
+              "y": -0.99,
+              "z": -179.24
             },
             "scale": {
               "x": 1,
@@ -560,17 +1249,20 @@
           },
           "visible": true,
           "layer": 0,
-          "fov": 45,
-          "orthoSize": 10,
-          "near": 0.1,
-          "far": 100,
-          "isDefault": false,
-          "targetLookAt": ""
+          "overrides": {
+            "fov": 45,
+            "orthoSize": 10,
+            "near": 0.1,
+            "far": 100,
+            "isDefault": false,
+            "targetLookAt": ""
+          }
         },
         {
           "id": "light_mo3opo1g_6",
           "name": "New light",
-          "type": "light",
+          "type": "archetype_instance",
+          "archetypeId": "_sys:Light",
           "transform": {
             "position": {
               "x": -2.187,
@@ -590,30 +1282,32 @@
           },
           "visible": true,
           "layer": 0,
-          "lightType": "point",
-          "color": "#ffffff",
-          "intensity": 91,
-          "distance": 10,
-          "castShadows": true
+          "overrides": {
+            "lightType": "point",
+            "color": "#ffffff",
+            "intensity": 91,
+            "distance": 10,
+            "castShadows": true
+          }
         },
         {
-          "id": "door_1777497571191_room_1776477105780",
+          "id": "door_1777690093242_room_1776477105780",
           "name": "Door",
           "type": "door",
           "transform": {
             "position": {
-              "x": -1.684,
+              "x": -1.9947369823601282,
               "y": 0,
-              "z": -6.259
+              "z": -6.19044581371981
             },
             "rotation": {
               "x": 0,
-              "y": -171.87,
+              "y": -171.17,
               "z": 0
             },
             "scale": {
-              "x": 1.706,
-              "y": 1.936,
+              "x": 1.635,
+              "y": 2.5,
               "z": 0.35
             }
           },
@@ -636,11 +1330,11 @@
           "playbackSpeed": 1,
           "sequenceLoop": true,
           "sequenceAutoplay": true,
-          "wallDirX": -0.9899494936611666,
-          "wallDirZ": 0.14142135623730936,
-          "wallAnchorX": -1.683869346733228,
-          "wallAnchorZ": -6.259447236180968,
-          "worldDoorId": "door_1777497571191",
+          "wallDirX": -0.9881604816024017,
+          "wallDirZ": 0.15342380062855168,
+          "wallAnchorX": -1.9947369823601282,
+          "wallAnchorZ": -6.19044581371981,
+          "worldDoorId": "door_1777690093242",
           "castShadow": false,
           "receiveShadow": true
         }
@@ -673,15 +1367,15 @@
   ],
   "doors": [
     {
-      "id": "door_1777497571191",
+      "id": "door_1777690093242",
       "points": [
         {
-          "x": -0.84,
-          "y": -6.38
+          "x": -1.1869678573320535,
+          "y": -6.315861686444491
         },
         {
-          "x": -2.528,
-          "y": -6.138
+          "x": -2.802506107388203,
+          "y": -6.065029940995128
         }
       ],
       "room1Id": "room_1776477096922",

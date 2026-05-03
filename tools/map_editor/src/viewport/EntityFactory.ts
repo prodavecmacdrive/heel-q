@@ -7,6 +7,7 @@ import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUnifo
 import type {
   EditorEntity,
   PrimitiveEntity,
+  TextureEntity,
   CameraEntity,
   LightEntity,
   SoundEntity,
@@ -15,13 +16,22 @@ import type {
   SpriteEntity,
   AnimatedSpriteEntity,
   DoorEntity,
+  ArchetypeSchema,
+  ArchetypeInstanceEntity,
 } from '../types/entities';
+import { getNestedArchetypeInstances, resolveArchetypeInstance } from '../types/entities';
 
 /**
  * Creates a Three.js Object3D representation for an entity.
  * Each returned object has `userData.entityId` set for raycaster picking.
  */
 export class EntityFactory {
+
+  private archetypeSchema: ArchetypeSchema | null = null;
+
+  public setArchetypeSchema(schema: ArchetypeSchema): void {
+    this.archetypeSchema = schema;
+  }
 
   public create(entity: EditorEntity): THREE.Object3D {
     let obj: THREE.Object3D;
@@ -35,6 +45,9 @@ export class EntityFactory {
         break;
       case 'primitive':
         obj = this.createPrimitive(entity);
+        break;
+      case 'texture':
+        obj = this.createTexture(entity);
         break;
       case 'camera':
         obj = this.createCameraHelper(entity);
@@ -53,6 +66,9 @@ export class EntityFactory {
         break;
       case 'door':
         obj = this.createDoorHelper(entity);
+        break;
+      case 'archetype_instance':
+        obj = this.createArchetypeInstance(entity);
         break;
     }
 
@@ -111,7 +127,6 @@ export class EntityFactory {
     const mat = new THREE.MeshStandardMaterial(matArgs);
     const mesh = new THREE.Mesh(geo, mat);
     mesh.castShadow = true;
-    mesh.position.y = 1; // lift to stand on floor
 
     // Wireframe outline
     const wire = new THREE.LineSegments(
@@ -120,6 +135,21 @@ export class EntityFactory {
     );
     mesh.add(wire);
 
+    const billboardMode = entity.billboardMode || 'fixed';
+
+    if (billboardMode === 'face_camera' || billboardMode === 'y_axis') {
+      // Wrap in a group so the y-offset survives create()'s position assignment.
+      // The group origin = entity feet; the mesh rises 1 unit so the bottom of the
+      // 2-unit-tall plane sits at the group origin (on the floor).
+      const group = new THREE.Group();
+      mesh.position.y = 1;
+      group.add(mesh);
+      group.userData.billboardMode = billboardMode;
+      return group;
+    }
+
+    // Fixed / env texture — center of plane IS the entity origin; user places freely.
+    mesh.userData.billboardMode = billboardMode;
     return mesh;
   }
 
@@ -137,28 +167,32 @@ export class EntityFactory {
     }
 
     const color = new THREE.Color(entity.color);
+    const hasSequence = Boolean(entity.sequenceSource);
+    const textureKey = hasSequence ? entity.sequenceSource : entity.textureSource;
+    const hasTexture = Boolean(textureKey);
     const matParams: THREE.MeshStandardMaterialParameters = {
       color,
-      transparent: true,
+      transparent: hasTexture || entity.opacity < 1,
       opacity: entity.opacity,
       roughness: 0.6,
       metalness: 0.1,
       wireframe: entity.materialType === 'invisible',
+      alphaTest: hasTexture ? 0.1 : 0,
     };
 
-    // Apply static texture if materialType is 'textured' or 'sequence'
-    const textureKey = entity.materialType === 'sequence' && entity.sequenceSource ? entity.sequenceSource : entity.textureSource;
-    if ((entity.materialType === 'textured' || entity.materialType === 'sequence') && textureKey) {
+    // Match engine behavior: if a texture source exists, apply it even when the
+    // serialized material type is still at its default value.
+    if (textureKey) {
       const texSrc = textureKey;
       let tex = this.textureCache.get(texSrc);
       if (!tex) {
         const loader = new THREE.TextureLoader();
         const path = texSrc.startsWith('textures/') || texSrc.startsWith('sprites/')
           ? texSrc
-          : (entity.materialType === 'sequence' ? `sprites/${texSrc}` : `textures/${texSrc}`);
+          : (hasSequence ? `sprites/${texSrc}` : `textures/${texSrc}`);
         
         // Ensure we handle the .png if only a .json name was provided for a sequence
-        const finalPath = (entity.materialType === 'sequence' && !path.endsWith('.png') && !path.endsWith('.jpg'))
+        const finalPath = (hasSequence && !path.endsWith('.png') && !path.endsWith('.jpg'))
             ? path.replace('.json', '.png').replace(/\.[^.]+$/, '.png')
             : path;
             
@@ -320,7 +354,10 @@ export class EntityFactory {
     light.position.set(0, 0, 0);
     (light as any).isEditorLight = true;
     group.add(light);
-    if (helper) group.add(helper);
+    if (helper) {
+      helper.visible = false;
+      group.add(helper);
+    }
 
     // Store refs for EditorApp to use (CameraHelper, helper updates, solo mode)
     group.userData.lightInstance = light;
@@ -348,9 +385,30 @@ export class EntityFactory {
         new THREE.Vector3(0, 0, 0),
         targetSphere.position.clone(),
       ]);
-      group.add(new THREE.Line(lineGeo, new THREE.LineBasicMaterial({ color: 0xffcc00, transparent: true, opacity: 0.5 })));
+      const lineMaterial = new THREE.LineBasicMaterial({ color: 0xffcc00, transparent: true, opacity: 0.7 });
+      const line = new THREE.Line(lineGeo, lineMaterial);
+      line.visible = true;
+
+      const defaultDir = new THREE.Vector3(0, 0, -1);
+      const targetDir = targetSphere.position.clone();
+      const hasTarget = targetDir.lengthSq() > 1e-6;
+      // Arrow should point in the light's forward direction. The vector from
+      // the light origin to the target describes where the light is aiming;
+      // ArrowHelper expects a direction vector pointing away from origin along
+      // the arrow. For directional/spot lights the visual direction should be
+      // from the light origin TOWARDS the target, so we use that vector but
+      // negate it to match the conventional light-forward direction used
+      // elsewhere in the editor (and to correct the previous inversion).
+      const dir = hasTarget ? targetDir.clone().normalize().multiplyScalar(-1) : defaultDir.clone().multiplyScalar(-1);
+      const length = hasTarget ? targetDir.length() : 2;
+      const arrow = new THREE.ArrowHelper(dir, new THREE.Vector3(0, 0, 0), length, 0xffcc00, 0.15, 0.08);
+      arrow.visible = true;
+      group.add(arrow);
+
+      group.add(line);
       group.add(targetSphere);
       group.userData.targetSphere = targetSphere;
+      group.userData.targetLine = line;
     }
 
     return group;
@@ -536,5 +594,226 @@ export class EntityFactory {
     group.add(indicator);
 
     return group;
+  }
+
+  // ── Archetype Instance ─────────────────────────────────────────────
+
+  /**
+   * Creates ONLY the root visual for an archetype instance, without any nested
+   * archetype children.  Used by the ArchetypeVisualEditorPanel so each item
+   * can be an independently selectable/movable object in the scene.
+   *
+   * Returns a neutral Group whose origin is the entity's logical position.
+   * Internal mesh offsets (e.g. primitive +0.5 floor offset, billboard sprite +1)
+   * are kept inside the group as children so the gizmo always reads/writes a
+   * clean (0,0,0)-based transform.
+   */
+  public createRootOnly(entity: ArchetypeInstanceEntity): THREE.Object3D {
+    if (!this.archetypeSchema) return this.createGenericPlaceholder(entity);
+    const resolved = resolveArchetypeInstance(entity, this.archetypeSchema);
+    if (!resolved) return this.createGenericPlaceholder(entity);
+    // Wrap in a group so internal mesh Y-offsets don't pollute the stored transform.
+    const wrapper = new THREE.Group();
+    wrapper.add(this.createResolvedRenderable(resolved as unknown as EditorEntity));
+    this.applyChildTransforms(wrapper, entity.overrides);
+    return wrapper;
+  }
+
+  private createArchetypeInstance(entity: ArchetypeInstanceEntity): THREE.Object3D {
+    return this.createArchetypeInstanceNode(entity, new Set<string>());
+  }
+
+  private createArchetypeInstanceNode(entity: ArchetypeInstanceEntity, ancestry: Set<string>): THREE.Object3D {
+    if (!this.archetypeSchema) {
+      return this.createGenericPlaceholder(entity);
+    }
+    if (ancestry.has(entity.archetypeId)) {
+      return this.createGenericPlaceholder(entity);
+    }
+
+    const resolved = resolveArchetypeInstance(entity, this.archetypeSchema);
+    if (!resolved) {
+      return this.createGenericPlaceholder(entity);
+    }
+
+    // Wrap the renderable in a neutral Group so that internal per-type mesh
+    // offsets (e.g. primitive bottom-floor +0.5, billboard sprite +1) remain
+    // isolated as children. applyTransform then acts on the group's origin,
+    // which matches the coordinate system used by the visual editor gizmo.
+    const renderableWrapper = new THREE.Group();
+    renderableWrapper.add(this.createResolvedRenderable(resolved as unknown as EditorEntity));
+
+    const group = new THREE.Group();
+    group.add(renderableWrapper);
+
+    const nextAncestry = new Set(ancestry);
+    nextAncestry.add(entity.archetypeId);
+    for (const child of getNestedArchetypeInstances(entity, this.archetypeSchema)) {
+      const childNode = this.createArchetypeInstanceNode(child, nextAncestry);
+      this.applyTransform(childNode, child.transform);
+      group.add(childNode);
+    }
+
+    // Apply per-child overrides saved by the visual editor. The editor writes
+    // nestedValue.overrides.__childTransforms = { "path/to/node": { transform } }
+    // where path segments are '/'-separated object names. We walk those entries
+    // and apply the stored transform to the matching object inside the group.
+    this.applyChildTransforms(group, entity.overrides);
+
+    return group;
+  }
+
+  private applyChildTransforms(root: THREE.Object3D, overrides: Record<string, unknown> | undefined): void {
+    try {
+      const childTransforms = overrides?.__childTransforms;
+      if (!childTransforms || typeof childTransforms !== 'object') return;
+
+      for (const [path, transform] of Object.entries(childTransforms as Record<string, any>)) {
+        if (!path) continue;
+        const target = this.findNamedPath(root, path.split('/').filter(Boolean));
+        if (!target) continue;
+
+        if (transform.position) {
+          target.position.set(
+            transform.position.x ?? 0,
+            transform.position.y ?? 0,
+            transform.position.z ?? 0,
+          );
+        }
+        if (transform.rotation) {
+          target.rotation.set(
+            THREE.MathUtils.degToRad(transform.rotation.x ?? 0),
+            THREE.MathUtils.degToRad(transform.rotation.y ?? 0),
+            THREE.MathUtils.degToRad(transform.rotation.z ?? 0),
+          );
+        }
+        if (transform.scale) {
+          target.scale.set(
+            transform.scale.x ?? 1,
+            transform.scale.y ?? 1,
+            transform.scale.z ?? 1,
+          );
+        }
+      }
+    } catch (err) {
+      // Non-fatal — editor-written overrides may be absent or malformed.
+      // Keep instantiation resilient.
+      // eslint-disable-next-line no-console
+      console.warn('[EntityFactory] failed applying child transforms override', err);
+    }
+  }
+
+  private findNamedPath(root: THREE.Object3D, segments: string[], index = 0): THREE.Object3D | null {
+    if (index >= segments.length) return root;
+
+    const targetName = segments[index];
+
+    for (const child of root.children) {
+      if (child.name === targetName) {
+        const found = this.findNamedPath(child, segments, index + 1);
+        if (found) return found;
+      }
+    }
+
+    // Skip structural wrappers that intentionally have no name.
+    for (const child of root.children) {
+      if (child.name) continue;
+      const found = this.findNamedPath(child, segments, index);
+      if (found) return found;
+    }
+
+    return null;
+  }
+
+  private createResolvedRenderable(entity: EditorEntity): THREE.Object3D {
+    switch (entity.type) {
+      case 'sprite':
+      case 'animated_sprite':
+        return this.createSprite(entity as SpriteEntity);
+      case 'primitive':
+        return this.createPrimitive(entity as PrimitiveEntity);
+      case 'texture':
+        return this.createTexture(entity as TextureEntity);
+      case 'camera':
+        return this.createCameraHelper(entity as CameraEntity);
+      case 'light':
+        return this.createLightHelper(entity as LightEntity);
+      case 'sound':
+        return this.createSoundHelper(entity as SoundEntity);
+      case 'trigger':
+        return this.createTriggerHelper(entity as TriggerEntity);
+      case 'spawn':
+        return this.createSpawnHelper(entity as SpawnEntity);
+      case 'door':
+        return this.createDoorHelper(entity as DoorEntity);
+      default:
+        return this.createGenericPlaceholder({
+          id: 'unknown',
+          name: 'Unknown',
+          type: 'archetype_instance',
+          archetypeId: '',
+          transform: { position: { x: 0, y: 0, z: 0 }, rotation: { x: 0, y: 0, z: 0 }, scale: { x: 1, y: 1, z: 1 } },
+          visible: true,
+          layer: 0,
+          overrides: {},
+        });
+    }
+  }
+
+  private applyTransform(obj: THREE.Object3D, transform: ArchetypeInstanceEntity['transform']): void {
+    obj.position.set(transform.position.x, transform.position.y, transform.position.z);
+    obj.rotation.set(
+      THREE.MathUtils.degToRad(transform.rotation.x),
+      THREE.MathUtils.degToRad(transform.rotation.y),
+      THREE.MathUtils.degToRad(transform.rotation.z),
+    );
+    obj.scale.set(transform.scale.x, transform.scale.y, transform.scale.z);
+  }
+
+  private createTexture(entity: TextureEntity): THREE.Object3D {
+    const geo = new THREE.PlaneGeometry(2, 2);
+    const hasTexture = Boolean(entity.textureSource);
+    const matArgs: THREE.MeshStandardMaterialParameters = {
+      color: 0xffffff,
+      side: THREE.DoubleSide,
+      transparent: hasTexture || entity.opacity < 1,
+      opacity: entity.opacity,
+      roughness: 0.7,
+      alphaTest: hasTexture ? 0.1 : 0,
+    };
+
+    if (entity.textureSource) {
+      let tex = this.textureCache.get(entity.textureSource);
+      if (!tex) {
+        const loader = new THREE.TextureLoader();
+        let path = entity.textureSource;
+        if (!path.startsWith('sprites/') && !path.startsWith('textures/')) {
+          path = `textures/${path}`;
+        }
+        tex = loader.load(`/assets/${path}`);
+        this.textureCache.set(entity.textureSource, tex);
+      }
+      tex.repeat.set(entity.uvTilingX || 1, entity.uvTilingY || 1);
+      tex.offset.set(entity.uvOffsetX || 0, entity.uvOffsetY || 0);
+      matArgs.map = tex;
+      matArgs.color = new THREE.Color(0xffffff);
+    }
+
+    const mat = new THREE.MeshStandardMaterial(matArgs);
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.userData.billboardMode = 'fixed';
+    mesh.castShadow = entity.castShadows;
+    mesh.receiveShadow = entity.receiveShadows;
+
+    return mesh;
+  }
+
+  private createGenericPlaceholder(entity: ArchetypeInstanceEntity): THREE.Object3D {
+    const geo = new THREE.OctahedronGeometry(0.5);
+    const mat = new THREE.MeshStandardMaterial({ color: 0xff8800, wireframe: true });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.userData.entityId = entity.id;
+    mesh.userData.entityType = entity.type;
+    return mesh;
   }
 }

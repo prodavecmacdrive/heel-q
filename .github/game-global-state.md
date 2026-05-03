@@ -3,7 +3,7 @@
 Single source of truth for all game objects, ECS components, entity types, and their access/intersection points across the engine, map editor, and future tools.
 
 **Maintained by:** `global-state-synchronizer` skill  
-**Last updated:** 2026-04-18
+**Last updated:** 2026-05-02
 
 ---
 
@@ -300,3 +300,38 @@ Single source of truth for all game objects, ECS components, entity types, and t
 ### Intersection Points ⚠️
 - Adding a new sheet: create `assets/sprites/{key}.sheet.json` — no source code changes needed
 - `stateFrames` keys must match `SpriteAnimation.state` values ('idle', 'walk', etc.)
+
+---
+
+## Archetype Nested Objects
+
+**Category:** Shared Archetype Schema
+**Status:** Active
+
+### State Structure
+| Property | Type | Default | Description |
+|---|---|---|---|
+| `ArchetypePropertyDef.type` | `'object'` | — | Marks a property as object-valued |
+| `ArchetypePropertyDef.objectKind` | `'nested_archetype'` | — | Declares that the object stores a child archetype reference |
+| `NestedArchetypeValue.archetypeId` | string | `''` | User archetype to spawn as a child |
+| `NestedArchetypeValue.transform` | `BaseEntity['transform']` | identity | Child-local transform relative to parent archetype instance |
+| `NestedArchetypeValue.visible` | boolean | true | Child visibility flag inherited by runtime expansion |
+| `NestedArchetypeValue.layer` | number | 0 | Child layer value |
+| `NestedArchetypeValue.overrides` | `Record<string, unknown>` | `{}` | Per-child archetype overrides |
+
+### Access Points
+| Layer | File | Operation | Notes |
+|---|---|---|---|
+| Editor type | `tools/shared_core/src/types/entities.ts` | Define | `ArchetypeObjectKind`, `NestedArchetypeValue`, `getNestedArchetypeInstances()` |
+| Editor UI | `tools/map_editor/src/ui/ArchetypeEditorPanel.ts` | Read/Write | Add-property popup creates `nested_archetype` object props; dropdown edits default target archetype |
+| Editor UI | `tools/map_editor/src/ui/RightPanel.ts` | Read/Write | Archetype instance inspector renders nested-object overrides as archetype dropdowns |
+| Editor viewport | `tools/map_editor/src/viewport/EntityFactory.ts` | Read | Recursively attaches nested archetype children into a composite preview group |
+| Engine mapper | `engine/src/loaders/WorldLoader.ts` | Read/Transform | Expands nested archetype children into concrete runtime entities before `EntitySpawnDef` mapping |
+| Engine data | N/A | — | No new `EntitySpawnDef` fields; nested children are flattened before room spawn |
+| Engine spawner | `engine/src/engine/rooms/RoomManager.ts` | Read | Indirect only; receives already-expanded entity list |
+| ECS component | N/A | — | No ECS component added |
+
+### Intersection Points ⚠️
+- Nested archetype composition is shared between editor preview and engine runtime, so `NestedArchetypeValue` shape in `tools/shared_core/src/types/entities.ts` must stay in sync with both `EntityFactory.ts` and `WorldLoader.ts`
+- Child transforms are composed during expansion, not at spawn time; changing transform semantics requires simultaneous updates to `composeTransforms()`, editor preview composition, and runtime entity flattening
+- Nested objects currently only reference existing user archetypes; system archetypes (`_sys:*`) are intentionally excluded from selection in editor UI

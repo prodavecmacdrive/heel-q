@@ -85,6 +85,47 @@ export default defineConfig({
             }
             return;
           }
+
+          if (req.url === '/api/archetypes' && req.method === 'GET') {
+            try {
+              const schemaPath = path.resolve(__dirname, '../../engine/src/data/archetype_schema.json');
+              if (!fs.existsSync(schemaPath)) {
+                res.statusCode = 200;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ archetypes: {} }));
+              } else {
+                const schema = fs.readFileSync(schemaPath, 'utf-8');
+                res.statusCode = 200;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(schema);
+              }
+            } catch(e) {
+              res.statusCode = 500;
+              res.end(JSON.stringify({ error: String(e) }));
+            }
+            return;
+          }
+
+          if (req.url === '/api/save-archetypes' && req.method === 'POST') {
+            let body = '';
+            req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
+            req.on('end', () => {
+              try {
+                // Validate JSON before writing
+                JSON.parse(body);
+                const schemaPath = path.resolve(__dirname, '../../engine/src/data/archetype_schema.json');
+                fs.mkdirSync(path.dirname(schemaPath), { recursive: true });
+                fs.writeFileSync(schemaPath, body, 'utf-8');
+                res.statusCode = 200;
+                res.end(JSON.stringify({ success: true }));
+              } catch (err) {
+                console.error('Failed to save archetypes:', err);
+                res.statusCode = 500;
+                res.end(JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
+              }
+            });
+            return;
+          }
           next();
         });
       }

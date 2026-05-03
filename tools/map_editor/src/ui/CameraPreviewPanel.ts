@@ -1,9 +1,8 @@
 /* ═══════════════════════════════════════════════════════════════════════
-   CameraPreviewPanel — live camera preview using the main WebGL renderer
-   Renders a scissored sub-viewport in the bottom-right corner of the canvas.
-   ═══════════════════════════════════════════════════════════════════════ */
+  CameraPreviewPanel — dev-only live camera preview using the running engine
+  Embeds the engine app in an iframe and syncs room/camera state via postMessage.
+  ═══════════════════════════════════════════════════════════════════════ */
 
-import * as THREE from 'three';
 import type { CameraEntity, EditorEntity } from '../types/entities';
 
 // Preview box size in CSS pixels
@@ -14,20 +13,19 @@ const MARGIN    = 12;
 
 export class CameraPreviewPanel {
   private panel: HTMLElement;
+  private frame: HTMLIFrameElement = document.createElement('iframe');
   private select: HTMLSelectElement = document.createElement('select');
+  private refreshButton: HTMLButtonElement = document.createElement('button');
   private noSignalEl: HTMLElement = document.createElement('div');
-
-  private previewCamera: THREE.PerspectiveCamera;
+  private readonly isDev = ['localhost', '127.0.0.1'].includes(window.location.hostname) || window.location.port === '3001';
+  private readonly engineOrigin = `${window.location.protocol}//${window.location.hostname}:3000`;
   private entityMap: Map<string, CameraEntity> = new Map();
   private selectedId = '';
+  private activeRoomId: string | null = null;
+  private frameLoaded = false;
+  private lastPayload = '';
 
-  constructor(
-    private readonly container: HTMLElement,
-    private readonly renderer: THREE.WebGLRenderer,
-    private readonly scene: THREE.Scene,
-  ) {
-    this.previewCamera = new THREE.PerspectiveCamera(60, PREVIEW_W / PREVIEW_H, 0.1, 500);
-
+  constructor(private readonly container: HTMLElement) {
     this.panel = this.buildDOM();
     this.container.appendChild(this.panel);
   }
@@ -35,7 +33,8 @@ export class CameraPreviewPanel {
   // ── Public API ─────────────────────────────────────────────────────
 
   /** Rebuild the camera dropdown from the current room entity list. */
-  public updateCameraList(entities: EditorEntity[]): void {
+  public updateCameraList(roomId: string | null, entities: EditorEntity[]): void {
+    this.activeRoomId = roomId;
     const cameras = entities.filter(e => e.type === 'camera') as CameraEntity[];
     const prevId = this.selectedId;
 
@@ -51,6 +50,7 @@ export class CameraPreviewPanel {
       this.select.appendChild(opt);
       this.selectedId = '';
       this.noSignalEl.style.display = 'flex';
+      this.postPreviewState();
       return;
     }
 
@@ -75,39 +75,12 @@ export class CameraPreviewPanel {
     }
 
     this.noSignalEl.style.display = 'none';
-    this.syncCamera();
+    this.postPreviewState();
   }
 
-  /**
-   * Called once per frame AFTER the main scene render.
-   * Draws the selected camera's view into a scissored sub-region of the main canvas.
-   */
-  public render(): void {
-    if (this.panel.style.display === 'none') return;
-    if (!this.selectedId || !this.entityMap.has(this.selectedId)) return;
-
-    // Always sync so gizmo-dragging a camera updates the preview live
-    this.syncCamera();
-
-    const canvas = this.renderer.domElement;
-    const cw = canvas.clientWidth;
-    const ch = canvas.clientHeight;
-    if (cw <= 0 || ch <= 0) return;
-
-    // In WebGL the Y origin is at the BOTTOM-LEFT of the canvas.
-    // MARGIN positions the bottom of the preview body area from the canvas bottom.
-    const x = cw - PREVIEW_W - MARGIN;
-    const y = MARGIN; // from canvas bottom
-
-    this.renderer.setViewport(x, y, PREVIEW_W, PREVIEW_H);
-    this.renderer.setScissor(x, y, PREVIEW_W, PREVIEW_H);
-    this.renderer.setScissorTest(true);
-    this.renderer.render(this.scene, this.previewCamera);
-
-    // Restore the full-canvas viewport for subsequent draws
-    this.renderer.setViewport(0, 0, cw, ch);
-    this.renderer.setScissor(0, 0, cw, ch);
-    this.renderer.setScissorTest(false);
+  public syncPreview(enabled: boolean): void {
+    if (!this.isDev || !enabled || this.panel.style.display === 'none') return;
+    this.postPreviewState();
   }
 
   public show(): void { this.panel.style.display = 'block'; }
@@ -140,25 +113,58 @@ export class CameraPreviewPanel {
     this.select.title = 'Select camera entity';
     this.select.addEventListener('change', () => {
       this.selectedId = this.select.value;
-      this.syncCamera();
+      this.postPreviewState();
+    });
+
+    this.refreshButton = document.createElement('button');
+    this.refreshButton.className = 'cam-preview-refresh';
+    this.refreshButton.type = 'button';
+    this.refreshButton.title = this.isDev ? 'Reload engine preview' : 'Available in dev mode only';
+    this.refreshButton.setAttribute('aria-label', 'Refresh camera preview');
+    this.refreshButton.disabled = !this.isDev;
+    this.refreshButton.innerHTML = `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M21 12a9 9 0 1 1-2.64-6.36"/>
+        <polyline points="21 3 21 9 15 9"/>
+      </svg>
+    `;
+    this.refreshButton.addEventListener('click', () => {
+      this.reloadPreviewFrame();
     });
 
     header.appendChild(label);
     header.appendChild(this.select);
+    header.appendChild(this.refreshButton);
     panel.appendChild(header);
 
-    // ── Body (transparent — Three.js draws here) ──
+    // ── Body (iframe — engine renders here) ──
     const body = document.createElement('div');
     body.className = 'cam-preview-body';
 
+    this.frame = document.createElement('iframe');
+    this.frame.className = 'cam-preview-frame';
+    this.frame.title = 'Engine camera preview';
+    this.frame.loading = 'eager';
+    this.frame.referrerPolicy = 'no-referrer';
+    if (this.isDev) {
+      this.frame.src = `${this.engineOrigin}/?editorPreview=1`;
+      this.frame.addEventListener('load', () => {
+        this.frameLoaded = true;
+        this.postPreviewState();
+      });
+    }
+    body.appendChild(this.frame);
+
     this.noSignalEl = document.createElement('div');
     this.noSignalEl.className = 'cam-preview-nosignal';
-    this.noSignalEl.innerHTML = `
+    this.noSignalEl.innerHTML = this.isDev ? `
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="28" height="28">
         <path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
         <line x1="2" y1="2" x2="22" y2="22" stroke-width="1.5"/>
       </svg>
       <span>No cameras in room</span>
+    ` : `
+      <span>Camera preview is available in dev mode only.</span>
     `;
     body.appendChild(this.noSignalEl);
     panel.appendChild(body);
@@ -166,24 +172,38 @@ export class CameraPreviewPanel {
     return panel;
   }
 
-  private syncCamera(): void {
+  private postPreviewState(): void {
+    if (!this.isDev) return;
+    if (!this.frameLoaded || !this.frame.contentWindow) return;
+
     const entity = this.entityMap.get(this.selectedId);
-    if (!entity) return;
+    const payload = JSON.stringify({
+      type: 'heelquest-editor-preview-sync',
+      roomId: this.activeRoomId,
+      cameraId: entity?.id ?? null,
+      camera: entity ? {
+        position: { ...entity.transform.position },
+        rotation: {
+          x: entity.transform.rotation.x * Math.PI / 180,
+          y: entity.transform.rotation.y * Math.PI / 180,
+          z: entity.transform.rotation.z * Math.PI / 180,
+        },
+        fov: entity.fov > 0 ? entity.fov : 60,
+        near: entity.near > 0 ? entity.near : 0.1,
+        far: entity.far > 0 ? entity.far : 500,
+      } : null,
+    });
 
-    const t = entity.transform;
-    this.previewCamera.fov    = entity.fov  > 0  ? entity.fov  : 60;
-    this.previewCamera.near   = entity.near > 0  ? entity.near : 0.1;
-    this.previewCamera.far    = entity.far  > 0  ? entity.far  : 500;
-    this.previewCamera.aspect = PREVIEW_W / PREVIEW_H;
+    if (payload === this.lastPayload) return;
+    this.lastPayload = payload;
+    this.frame.contentWindow.postMessage(JSON.parse(payload), this.engineOrigin);
+  }
 
-    this.previewCamera.position.set(t.position.x, t.position.y, t.position.z);
-    this.previewCamera.rotation.set(
-      THREE.MathUtils.degToRad(t.rotation.x),
-      THREE.MathUtils.degToRad(t.rotation.y),
-      THREE.MathUtils.degToRad(t.rotation.z),
-      'YXZ',
-    );
-    this.previewCamera.updateProjectionMatrix();
+  private reloadPreviewFrame(): void {
+    if (!this.isDev) return;
+    this.frameLoaded = false;
+    this.lastPayload = '';
+    this.frame.src = `${this.engineOrigin}/?editorPreview=1&t=${Date.now()}`;
   }
 
   public static get PANEL_H(): number { return PREVIEW_H + HEADER_H; }

@@ -6,12 +6,69 @@ export type EntityType =
   | 'sprite'
   | 'animated_sprite'
   | 'primitive'
+  | 'texture'
   | 'camera'
   | 'light'
   | 'sound'
   | 'trigger'
   | 'spawn'
-  | 'door';
+  | 'door'
+  | 'archetype_instance';
+
+// ── Archetype Schema Types ─────────────────────────────────────────────
+
+export type ArchetypePropertyType =
+  | 'boolean'
+  | 'number'
+  | 'string'
+  | 'enum'
+  | 'asset_select'
+  | 'color_hex'
+  | 'array_of_ids'
+  | 'vec3'
+  | 'object';
+
+export type ArchetypeObjectKind = 'nested_archetype';
+
+export interface NestedArchetypeValue {
+  archetypeId: string;
+  transform?: BaseEntity['transform'];
+  visible?: boolean;
+  layer?: number;
+  overrides?: Record<string, unknown>;
+}
+
+export interface ArchetypePropertyDef {
+  name: string;
+  type: ArchetypePropertyType;
+  objectKind?: ArchetypeObjectKind;
+  default?: unknown;
+  options?: string[];
+  min?: number;
+  max?: number;
+  placeholder?: string;
+}
+
+export interface ArchetypeSockets {
+  inputs: string[];
+  outputs: string[];
+}
+
+export interface ArchetypeDef {
+  category: string;
+  description: string;
+  /** Maps to an existing EntityType renderType for engine spawning */
+  renderType: string;
+  /** Default transform applied when placing a new archetype instance in a room. */
+  defaultTransform?: BaseEntity['transform'];
+  sockets: ArchetypeSockets;
+  properties: ArchetypePropertyDef[];
+  defaultVerbs: string[];
+}
+
+export interface ArchetypeSchema {
+  archetypes: Record<string, ArchetypeDef>;
+}
 
 export type PrimitiveGeometry = 'cube' | 'sphere' | 'plane' | 'cylinder' | 'cone';
 export type LightType = 'point' | 'directional' | 'spot' | 'rect_area';
@@ -106,6 +163,19 @@ export interface PrimitiveEntity extends BaseEntity {
   sequenceAutoplay: boolean;
   castShadows: boolean;
   receiveShadows: boolean;
+}
+
+export interface TextureEntity extends BaseEntity {
+  type: 'texture';
+  textureSource: string;
+  blendMode: BlendMode;
+  opacity: number;
+  castShadows: boolean;
+  receiveShadows: boolean;
+  uvTilingX: number;
+  uvTilingY: number;
+  uvOffsetX: number;
+  uvOffsetY: number;
 }
 
 export interface CameraEntity extends BaseEntity {
@@ -231,17 +301,135 @@ export interface DoorEntity extends BaseEntity {
   receiveShadow: boolean;
 }
 
+export interface ArchetypeInstanceEntity extends BaseEntity {
+  type: 'archetype_instance';
+  /** Key into ArchetypeSchema.archetypes */
+  archetypeId: string;
+  /**
+   * Only the properties that differ from the archetype's defaults.
+   * Base entity props (id, name, transform, visible, layer) are NOT in overrides.
+   */
+  overrides: Record<string, unknown>;
+}
+
 /** Discriminated union of all entity types */
 export type EditorEntity =
   | SpriteEntity
   | AnimatedSpriteEntity
   | PrimitiveEntity
+  | TextureEntity
   | CameraEntity
   | LightEntity
   | SoundEntity
   | TriggerEntity
   | SpawnEntity
-  | DoorEntity;
+  | DoorEntity
+  | ArchetypeInstanceEntity;
+
+type ResolvedArchetypeEntity = (Omit<EditorEntity, 'type'> & { type: string } & Record<string, unknown>);
+
+/**
+ * Resolve an archetype instance into a concrete entity by merging archetype
+ * property defaults with instance overrides.  Returns null if the archetype
+ * is not found in the schema.
+ */
+export function resolveArchetypeInstance(
+  entity: ArchetypeInstanceEntity,
+  schema: ArchetypeSchema,
+): ResolvedArchetypeEntity | null {
+  const archetype = schema.archetypes[entity.archetypeId];
+  if (!archetype) return null;
+
+  // Build merged props: archetype defaults → instance overrides
+  const merged: Record<string, unknown> = {};
+  for (const prop of archetype.properties) {
+    merged[prop.name] = prop.default;
+  }
+  Object.assign(merged, entity.overrides);
+
+  if (!merged.textureSource && typeof merged.texture === 'string') {
+    merged.textureSource = merged.texture;
+  }
+  if (!merged.texture && typeof merged.textureSource === 'string') {
+    merged.texture = merged.textureSource;
+  }
+
+  return {
+    ...entity,
+    ...merged,
+    type: archetype.renderType,
+  } as any;
+}
+
+export function createDefaultNestedArchetypeValue(archetypeId: string = ''): NestedArchetypeValue {
+  return {
+    archetypeId,
+    transform: createDefaultTransform(),
+    visible: true,
+    layer: 0,
+    overrides: {},
+  };
+}
+
+export function isNestedArchetypeValue(value: unknown): value is NestedArchetypeValue {
+  return Boolean(
+    value &&
+    typeof value === 'object' &&
+    typeof (value as NestedArchetypeValue).archetypeId === 'string'
+  );
+}
+
+export function composeTransforms(
+  parent: BaseEntity['transform'],
+  child?: BaseEntity['transform'],
+): BaseEntity['transform'] {
+  const local = child ?? createDefaultTransform();
+  return {
+    position: {
+      x: parent.position.x + local.position.x,
+      y: parent.position.y + local.position.y,
+      z: parent.position.z + local.position.z,
+    },
+    rotation: {
+      x: parent.rotation.x + local.rotation.x,
+      y: parent.rotation.y + local.rotation.y,
+      z: parent.rotation.z + local.rotation.z,
+    },
+    scale: {
+      x: parent.scale.x * local.scale.x,
+      y: parent.scale.y * local.scale.y,
+      z: parent.scale.z * local.scale.z,
+    },
+  };
+}
+
+export function getNestedArchetypeInstances(
+  entity: ArchetypeInstanceEntity,
+  schema: ArchetypeSchema,
+): ArchetypeInstanceEntity[] {
+  const archetype = schema.archetypes[entity.archetypeId];
+  if (!archetype) return [];
+
+  const nestedInstances: ArchetypeInstanceEntity[] = [];
+  for (const prop of archetype.properties) {
+    if (prop.type !== 'object' || prop.objectKind !== 'nested_archetype') continue;
+    const rawValue = entity.overrides[prop.name] ?? prop.default;
+    if (!isNestedArchetypeValue(rawValue) || !rawValue.archetypeId) continue;
+
+    nestedInstances.push({
+      id: generateId('nested'),
+      name: `${entity.name}:${prop.name}`,
+      type: 'archetype_instance',
+      archetypeId: rawValue.archetypeId,
+      transform: rawValue.transform ? composeTransforms(createDefaultTransform(), rawValue.transform) : createDefaultTransform(),
+      visible: rawValue.visible ?? entity.visible,
+      layer: rawValue.layer ?? entity.layer,
+      overrides: { ...(rawValue.overrides ?? {}) },
+    });
+  }
+
+  return nestedInstances;
+}
 
 // ── Factory Defaults ───────────────────────────────────────────────────
 
@@ -279,6 +467,9 @@ export function createDefaultEntity(type: EntityType, name?: string): EditorEnti
     case 'primitive':
       return { ...base, type: 'primitive', geometryType: 'cube', materialType: 'color', color: '#808080', isCollider: true, opacity: 0.5, textureSource: '', uvTilingX: 1, uvTilingY: 1, uvOffsetX: 0, uvOffsetY: 0, sequenceSource: '', sequenceJson: '', activeAnimation: '', playbackSpeed: 1, sequenceLoop: true, sequenceAutoplay: true, castShadows: false, receiveShadows: true };
 
+    case 'texture':
+      return { ...base, type: 'texture', textureSource: '', blendMode: 'normal', opacity: 1, castShadows: false, receiveShadows: true, uvTilingX: 1, uvTilingY: 1, uvOffsetX: 0, uvOffsetY: 0 };
+
     case 'camera':
       return { ...base, type: 'camera', fov: 45, orthoSize: 10, near: 0.1, far: 100, isDefault: false, targetLookAt: '' };
 
@@ -296,5 +487,35 @@ export function createDefaultEntity(type: EntityType, name?: string): EditorEnti
 
     case 'door':
       return { ...base, type: 'door', name: name || 'New Door', targetRoomId: '', targetSpawnId: '', interactionState: 'open', materialType: 'color', color: '#6B4423', opacity: 1, textureSource: '', uvTilingX: 1, uvTilingY: 1, uvOffsetX: 0, uvOffsetY: 0, sequenceSource: '', sequenceJson: '', activeAnimation: '', playbackSpeed: 1, sequenceLoop: true, sequenceAutoplay: true, wallDirX: 1, wallDirZ: 0, wallAnchorX: 0, wallAnchorZ: 0, worldDoorId: '', castShadow: false, receiveShadow: true, transform: { ...base.transform, scale: { x: 1.2, y: 2.5, z: 0.35 } } };
+
+    case 'archetype_instance':
+      return { ...base, type: 'archetype_instance', archetypeId: '', overrides: {} };
   }
+}
+
+/**
+ * Create a default archetype instance entity for the given archetype.
+ * Prefer this factory over createDefaultEntity('archetype_instance') since
+ * it correctly sets the archetypeId.
+ */
+export function createDefaultArchetypeInstance(
+  archetypeId: string,
+  archetype: ArchetypeDef,
+  name?: string,
+): ArchetypeInstanceEntity {
+  const defaultTransform = archetype.defaultTransform ?? createDefaultTransform();
+  return {
+    id: generateId('arch'),
+    name: name || archetypeId,
+    type: 'archetype_instance',
+    archetypeId,
+    transform: {
+      position: { ...defaultTransform.position },
+      rotation: { ...defaultTransform.rotation },
+      scale: { ...defaultTransform.scale },
+    },
+    visible: true,
+    layer: 0,
+    overrides: {},
+  };
 }

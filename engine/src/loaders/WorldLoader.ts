@@ -2,7 +2,8 @@
    WorldLoader — parses WorldProject JSON and returns engine-ready RoomData[]
    ═══════════════════════════════════════════════════════════════════════ */
 
-import type { WorldProject } from '@heel-quest/shared-core';
+import type { WorldProject, ArchetypeSchema } from '@heel-quest/shared-core';
+import { composeTransforms, getNestedArchetypeInstances, resolveArchetypeInstance } from '@heel-quest/shared-core';
 import type { RoomData, EntitySpawnDef, CameraDef } from '../engine/rooms/RoomData';
 import type { TextureManager } from '../engine/rendering/TextureManager';
 import { normalizeAssetPath } from '@heel-quest/shared-core';
@@ -23,9 +24,15 @@ export class WorldLoader {
     static async load(worldData: WorldProject, tm: TextureManager): Promise<WorldLoadResult> {
         console.log(`Loaded World Project: ${worldData.projectId} with ${worldData.rooms.length} rooms`);
 
+        // Load archetype schema for resolving archetype_instance entities
+        const archetypeSchema = await WorldLoader.loadArchetypeSchema();
+
         const mappedRooms = worldData.rooms.map(r => {
-            const legacyCam = WorldLoader.extractLegacyCamera(r.entities);
-            const spawnChar = WorldLoader.extractSpawnCharacter(r.entities);
+            // Pre-resolve archetype_instance entities for camera/spawn extraction
+            const resolvedEntities = r.entities.flatMap((e: any) => WorldLoader.expandCompositeEntity(e, archetypeSchema));
+
+            const legacyCam = WorldLoader.extractLegacyCamera(resolvedEntities);
+            const spawnChar = WorldLoader.extractSpawnCharacter(resolvedEntities);
             return {
                 id: r.id,
                 name: r.name,
@@ -34,12 +41,14 @@ export class WorldLoader {
                 spawnPoints: r.spawnPoints,
                 outline: WorldLoader.expandOutline(r.outline, r.cornerRadii),
                 entities: r.entities
+                    .flatMap((e): any[] => WorldLoader.expandCompositeEntity(e, archetypeSchema))
                     .filter((e): e is typeof e =>
                         e.type === 'sprite' || e.type === 'animated_sprite' ||
-                        e.type === 'primitive' || e.type === 'light' ||
+                        e.type === 'primitive' || e.type === 'texture' || e.type === 'light' ||
                         e.type === 'door' || e.type === 'sound' || e.type === 'trigger'
                     )
-                    .map((e): EntitySpawnDef => WorldLoader.mapEntity(e)),
+                    .map((e): EntitySpawnDef | null => WorldLoader.mapEntity(e, archetypeSchema))
+                    .filter((e): e is EntitySpawnDef => e !== null),
                 boundaries: {
                     floor: {
                         width: 100, depth: 100,
@@ -49,7 +58,7 @@ export class WorldLoader {
                     walls: []
                 },
                 portals: WorldLoader.mapPortals(r.id, worldData.doors),
-                cameras: WorldLoader.extractCameras(r.entities),
+                cameras: WorldLoader.extractCameras(resolvedEntities),
                 cameraPosition: legacyCam.position,
                 cameraRotation: legacyCam.rotation,
                 cameraFov: legacyCam.fov,
@@ -78,9 +87,71 @@ export class WorldLoader {
         return { rooms: mappedRooms, initialRoomId, sheetMeta };
     }
 
+    // ── Archetype Schema Loading ────────────────────────────────────
+
+    static async loadArchetypeSchema(): Promise<ArchetypeSchema> {
+        try {
+            const resp = await fetch('/src/data/archetype_schema.json');
+            if (!resp.ok) return { archetypes: {} };
+            return await resp.json() as ArchetypeSchema;
+        } catch {
+            return { archetypes: {} };
+        }
+    }
+
     // ── Entity Mapping ──────────────────────────────────────────────
 
-    private static mapEntity(e: any): EntitySpawnDef {
+    private static expandCompositeEntity(e: any, archetypeSchema: ArchetypeSchema, ancestry: Set<string> = new Set()): any[] {
+        if (e.type !== 'archetype_instance') {
+            return [e];
+        }
+
+        if (ancestry.has(e.archetypeId)) {
+            console.warn(`[WorldLoader] Recursive nested archetype detected for ${e.archetypeId}; skipping nested expansion.`);
+            return [];
+        }
+
+        const resolved = resolveArchetypeInstance(e, archetypeSchema);
+        if (!resolved) {
+            console.warn(`[WorldLoader] Unknown archetype: ${e.archetypeId}, skipping entity ${e.id}`);
+            return [];
+        }
+
+        const rootEntity = {
+            ...resolved,
+            id: e.id,
+            name: e.name,
+            transform: e.transform,
+            visible: e.visible,
+            layer: e.layer,
+        };
+
+        const nextAncestry = new Set(ancestry);
+        nextAncestry.add(e.archetypeId);
+
+        const nestedEntities = getNestedArchetypeInstances(e, archetypeSchema)
+            .flatMap((child) => WorldLoader.expandCompositeEntity({
+                ...child,
+                transform: composeTransforms(e.transform, child.transform),
+                visible: e.visible && child.visible,
+                layer: child.layer ?? e.layer,
+            }, archetypeSchema, nextAncestry));
+
+        return [rootEntity, ...nestedEntities];
+    }
+
+    private static mapEntity(e: any, archetypeSchema?: ArchetypeSchema): EntitySpawnDef | null {
+        // Resolve archetype_instance → concrete entity via schema
+        if (e.type === 'archetype_instance') {
+            if (!archetypeSchema) return null;
+            const resolved = resolveArchetypeInstance(e, archetypeSchema);
+            if (!resolved) {
+                console.warn(`[WorldLoader] Unknown archetype: ${e.archetypeId}, skipping entity ${e.id}`);
+                return null;
+            }
+            return WorldLoader.mapEntity(resolved, archetypeSchema);
+        }
+
         const result: EntitySpawnDef = {
             entityType: e.type,
             spriteKey: '',
@@ -137,7 +208,7 @@ export class WorldLoader {
             result.targetRoomId = e.targetRoomId || '';
             result.targetSpawnId = e.targetSpawnId || '';
             result.interactionState = e.interactionState || 'closed';
-            result.color = e.color || '#8B4513';
+            result.color = e.color || '#8B4423';
             result.opacity = e.opacity ?? 1;
             result.textureSource = normalizeAssetPath(e.textureSource || '');
             result.sequenceSource = normalizeAssetPath(e.sequenceSource || '');
@@ -153,6 +224,18 @@ export class WorldLoader {
             result.castShadow = e.castShadow ?? false;
             result.receiveShadow = e.receiveShadow ?? true;
             result.portalId = e.worldDoorId || '';
+        } else if (e.type === 'texture') {
+            result.entityType = 'primitive';
+            result.geometryType = 'plane';
+            result.textureSource = normalizeAssetPath(e.textureSource || e.texture || '');
+            result.uvTilingX = e.uvTilingX ?? 1;
+            result.uvTilingY = e.uvTilingY ?? 1;
+            result.uvOffsetX = e.uvOffsetX ?? 0;
+            result.uvOffsetY = e.uvOffsetY ?? 0;
+            result.opacity = e.opacity ?? 1;
+            result.castShadow = e.castShadows ?? false;
+            result.receiveShadow = e.receiveShadows ?? true;
+            result.isObstacle = e.isCollider ?? false;
         } else if (e.type === 'animated_sprite') {
             result.spriteKey = e.textureSource || '';
             result.sequenceJson = e.textureSource ? `${e.textureSource}.json` : '';

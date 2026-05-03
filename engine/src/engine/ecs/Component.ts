@@ -125,6 +125,7 @@ export interface CameraMarker {
     isDefault: boolean;
     targetLookAt: string;
     fov: number;
+    sourceId?: string;
 }
 
 // ─── Component registry ───────────────────────────────────────────

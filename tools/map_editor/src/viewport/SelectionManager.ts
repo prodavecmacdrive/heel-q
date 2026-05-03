@@ -113,6 +113,7 @@ export class SelectionManager {
     obj.traverse(child => {
       // Skip existing highlight meshes to avoid feedback loops
       if (child.userData.__selectionHighlight) return;
+      if (!child.visible) return;
       if (child instanceof THREE.Mesh && child.geometry) {
         child.geometry.computeBoundingBox();
         const geoBBox = child.geometry.boundingBox;

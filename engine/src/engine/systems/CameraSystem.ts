@@ -115,6 +115,33 @@ export class CameraSystem extends System {
         this.applyCamera(index);
     }
 
+    public switchCameraBySourceId(sourceId: string): boolean {
+        if (!sourceId) return false;
+        for (let i = 0; i < this.cameraEntities.length; i++) {
+            const cam = this.world.getComponent(this.cameraEntities[i], 'CameraMarker') as CameraMarker | undefined;
+            if (cam?.sourceId === sourceId) {
+                this.switchCamera(i);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public applyPreviewOverride(preview: {
+        position: { x: number; y: number; z: number };
+        rotation: { x: number; y: number; z: number };
+        fov: number;
+        near: number;
+        far: number;
+    }): void {
+        this.camera.position.set(preview.position.x, preview.position.y, preview.position.z);
+        this.camera.rotation.set(preview.rotation.x, preview.rotation.y, preview.rotation.z, 'YXZ');
+        this.camera.fov = preview.fov > 0 ? preview.fov : this.camera.fov;
+        this.camera.near = preview.near > 0 ? preview.near : this.camera.near;
+        this.camera.far = preview.far > 0 ? preview.far : this.camera.far;
+        this.camera.updateProjectionMatrix();
+    }
+
     private applyCamera(index: number) {
         const entity = this.cameraEntities[index];
         const transform = this.world.getComponent(entity, 'Transform') as Transform;

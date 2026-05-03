@@ -7,13 +7,18 @@ import type {
   Vec3,
   SpriteEntity,
   PrimitiveEntity,
+  TextureEntity,
   CameraEntity,
   LightEntity,
   SoundEntity,
   TriggerEntity,
   SpawnEntity,
   DoorEntity,
+  ArchetypeSchema,
+  ArchetypeInstanceEntity,
+  NestedArchetypeValue,
 } from '../types/entities';
+import { createDefaultNestedArchetypeValue, isNestedArchetypeValue, resolveArchetypeInstance } from '../types/entities';
 import type { HeightModifier, PointModifier, LineModifier, RoomData, DoorDef } from '../types/scene';
 
 export type InspectorChangeCallback = (target: any) => void;
@@ -28,6 +33,11 @@ export class RightPanel {
   private room: any | null = null;
   private modifier: HeightModifier | null = null;
   private onChange: InspectorChangeCallback;
+  private archetypeSchema: ArchetypeSchema | null = null;
+
+  public setArchetypeSchema(schema: ArchetypeSchema): void {
+    this.archetypeSchema = schema;
+  }
   private onDelete: InspectorDeleteCallback;
   private onDeleteRoom: InspectorDeleteCallback;
   private onEnterRoom?: (id: string) => void;
@@ -293,7 +303,30 @@ export class RightPanel {
         return this.renderSpawnProps(entity);
       case 'door':
         return this.renderDoorProps(entity);
+      case 'texture':
+        return this.renderTextureProps(entity as TextureEntity);
+      case 'archetype_instance':
+        return this.renderArchetypeInstanceProps(entity as ArchetypeInstanceEntity);
     }
+    return '';
+  }
+
+  private renderTextureProps(e: TextureEntity): string {
+    return `
+      <div class="inspector-section" data-toggle-section>
+        <div class="inspector-section-header">Texture Properties</div>
+        <div class="inspector-row">
+          ${this.propAsset('textureSource', 'Texture Path', e.textureSource || '', 'textures')}
+        </div>
+        <div class="inspector-row">
+          ${this.propNumber('opacity', 'Opacity', e.opacity, 2)}
+        </div>
+        <div class="inspector-row">
+          ${this.propCheckbox('castShadows', 'Cast Shadows', e.castShadows ?? false)}
+          ${this.propCheckbox('receiveShadows', 'Recv Shadows', e.receiveShadows ?? true)}
+        </div>
+      </div>
+    `;
   }
 
   private renderSpriteProps(e: SpriteEntity): string {
@@ -527,6 +560,161 @@ export class RightPanel {
     return html;
   }
 
+  // ── Render: Archetype Instance Inspector ─────────────────────────
+
+  private renderArchetypeInstanceProps(entity: ArchetypeInstanceEntity): string {
+    const { archetypeId, overrides } = entity;
+    const archetype = this.archetypeSchema?.archetypes[archetypeId];
+
+    if (!archetype) {
+      return this.section('Archetype Instance', `
+        <p style="color:#ff6666;font-size:11px;">Unknown archetype: <code>${this.esc(archetypeId)}</code></p>
+        <p style="color:#888;font-size:10px;">Archetype may have been deleted. Overrides are preserved.</p>
+        <div style="color:#888;font-size:10px;padding:4px 0;">${this.esc(JSON.stringify(overrides, null, 2))}</div>
+      `);
+    }
+
+    const inheritedProps = this.getRenderTypeProperties(archetype.renderType);
+    const propMap = new Map<string, { prop: any; inherited: boolean }>();
+
+    for (const prop of inheritedProps) {
+      propMap.set(prop.name, { prop, inherited: true });
+    }
+    for (const prop of archetype.properties) {
+      propMap.set(prop.name, { prop, inherited: false });
+    }
+
+    let propsHtml = '';
+    for (const { prop, inherited } of propMap.values()) {
+      const effectiveVal = overrides[prop.name] ?? prop.default;
+      const isOverridden = prop.name in overrides;
+      const inheritedSuffix = inherited ? ' <span style="color:#6c757d;font-size:9px;">(render type)</span>' : '';
+      const labelSuffix = isOverridden ? ' <span style="color:#e8a020;font-size:9px;">•</span>' : '';
+      const label = `${this.esc(prop.name)}${inheritedSuffix}${labelSuffix}`;
+
+      switch (prop.type) {
+        case 'boolean':
+          propsHtml += this.propCheckbox(prop.name, label, Boolean(effectiveVal));
+          break;
+        case 'number':
+          propsHtml += this.propNumber(prop.name, label, Number(effectiveVal) || 0, 3);
+          break;
+        case 'string':
+          propsHtml += this.propInput(prop.name, label, String(effectiveVal ?? ''));
+          break;
+        case 'enum':
+          propsHtml += this.propSelect(prop.name, label, String(effectiveVal ?? ''), prop.options ?? []);
+          break;
+        case 'asset_select':
+          propsHtml += this.propAsset(prop.name, label, String(effectiveVal ?? ''), this.getAssetCategory(archetype.renderType, prop.name));
+          break;
+        case 'color_hex':
+          propsHtml += this.propColor(prop.name, label, String(effectiveVal ?? '#ffffff'));
+          break;
+        case 'array_of_ids':
+          propsHtml += this.propInput(prop.name, label, Array.isArray(effectiveVal) ? (effectiveVal as string[]).join(', ') : String(effectiveVal ?? ''));
+          break;
+        case 'vec3': {
+          const v = (effectiveVal as any) ?? { x: 0, y: 0, z: 0 };
+          propsHtml += this.propVec3(prop.name, label, v);
+          break;
+        }
+        case 'object': {
+          if (prop.objectKind === 'nested_archetype') {
+            const nestedValue = isNestedArchetypeValue(effectiveVal)
+              ? effectiveVal
+              : createDefaultNestedArchetypeValue();
+            const nestedArchId = nestedValue.archetypeId;
+            const nestedArch = this.archetypeSchema?.archetypes[nestedArchId];
+            
+            // Render selector for the nested archetype
+            propsHtml += this.propSelect(
+              prop.name,
+              label,
+              nestedArchId,
+              this.getUserArchetypeIds(archetypeId),
+              'nested_archetype'
+            );
+
+            // Render child properties if the nested archetype exists
+            if (nestedArch) {
+              let childPropsHtml = '';
+              for (const childProp of nestedArch.properties) {
+                const childEffectiveVal = nestedValue.overrides?.[childProp.name] ?? childProp.default;
+                const childLabel = `${this.esc(childProp.name)}`;
+                const childPath = `${prop.name}__${childProp.name}`;
+                
+                switch (childProp.type) {
+                  case 'boolean':
+                    childPropsHtml += this.propCheckbox(childPath, childLabel, Boolean(childEffectiveVal));
+                    break;
+                  case 'number':
+                    childPropsHtml += this.propNumber(childPath, childLabel, Number(childEffectiveVal) || 0, 3);
+                    break;
+                  case 'string':
+                    childPropsHtml += this.propInput(childPath, childLabel, String(childEffectiveVal ?? ''));
+                    break;
+                  case 'enum':
+                    childPropsHtml += this.propSelect(childPath, childLabel, String(childEffectiveVal ?? ''), childProp.options ?? []);
+                    break;
+                  default:
+                    const isObj = childProp.type === 'vec3' || childProp.type === 'object';
+                    const displayVal = isObj ? JSON.stringify(childEffectiveVal ?? {}) : String(childEffectiveVal ?? '');
+                    childPropsHtml += this.propInput(childPath, childLabel, displayVal);
+                }
+              }
+              
+              if (childPropsHtml) {
+                propsHtml += `
+                  <div style="margin-left:12px;padding:8px 0;border-left:2px solid #444;border-radius:2px;">
+                    <div style="color:#aaa;font-size:10px;font-weight:600;margin-bottom:6px;">Child Object: ${this.esc(nestedArchId)}</div>
+                    ${childPropsHtml}
+                  </div>
+                `;
+              }
+            }
+            break;
+          }
+          propsHtml += this.propInput(prop.name, label, JSON.stringify(effectiveVal ?? {}));
+          break;
+        }
+        default:
+          propsHtml += this.propInput(prop.name, label, String(effectiveVal ?? ''));
+      }
+    }
+
+    const title = `${archetype.category} — ${this.esc(archetypeId)}`;
+    return this.section(title, propsHtml || '<p style="color:#888;font-size:11px;">No properties defined.</p>');
+  }
+
+  private getRenderTypeProperties(renderType: string) {
+    const systemKey = this.getSystemArchetypeKey(renderType);
+    const sysArch = systemKey ? this.archetypeSchema?.archetypes[systemKey] : null;
+    return sysArch?.properties ?? [];
+  }
+
+  private getSystemArchetypeKey(renderType: string): string | null {
+    const normalized = renderType.replace(/(^|_)([a-z])/g, (_, __, c) => c.toUpperCase());
+    return `_sys:${normalized}`;
+  }
+
+  private getAssetCategory(renderType: string, propName: string): 'textures' | 'sprites' | 'audio' {
+    if (propName === 'textureSource' || propName === 'sequenceSource' || propName === 'cookieTexture') {
+      if (renderType === 'sprite' || renderType === 'animated_sprite') return 'sprites';
+      return 'textures';
+    }
+    if (propName === 'audioSource') {
+      return 'audio';
+    }
+    return 'textures';
+  }
+
+  private getUserArchetypeIds(excludeId?: string): string[] {
+    return Object.keys(this.archetypeSchema?.archetypes ?? {})
+      .filter((id) => !id.startsWith('_sys:'))
+      .filter((id) => id !== excludeId);
+  }
+
   // ── Render: Height Modifier Inspector ────────────────────────────
 
   private renderModifier(m: HeightModifier) {
@@ -670,11 +858,11 @@ export class RightPanel {
       </div>`;
   }
 
-  private propSelect(key: string, label: string, value: string, options: string[]): string {
+  private propSelect(key: string, label: string, value: string, options: string[], objectKind?: string): string {
     return `
       <div class="prop-row">
         <span class="prop-label">${label}</span>
-        <select class="prop-select" data-prop="${key}">
+        <select class="prop-select" data-prop="${key}" ${objectKind ? `data-object-kind="${objectKind}"` : ''}>
           ${options.map(o => `<option value="${o}" ${o === value ? 'selected' : ''}>${o}</option>`).join('')}
         </select>
       </div>`;
@@ -775,12 +963,103 @@ export class RightPanel {
     });
   }
 
+  private resolveNestedArchetypeValue(arch: ArchetypeInstanceEntity, parentKey: string): NestedArchetypeValue | null {
+    if (isNestedArchetypeValue(arch.overrides[parentKey])) {
+      return { ...(arch.overrides[parentKey] as NestedArchetypeValue) };
+    }
+    const archDef = this.archetypeSchema?.archetypes[arch.archetypeId];
+    const parentPropDef = archDef?.properties.find((p) => p.name === parentKey);
+    if (isNestedArchetypeValue(parentPropDef?.default)) {
+      return { ...(parentPropDef!.default as NestedArchetypeValue) };
+    }
+    return null;
+  }
+
   private applyPropChange(
     entity: EditorEntity,
     propPath: string,
     input: HTMLInputElement | HTMLSelectElement
   ) {
     const parts = propPath.split('.');
+
+    // Handle archetype_instance overrides
+    if ((entity as any).type === 'archetype_instance') {
+      const arch = entity as unknown as ArchetypeInstanceEntity;
+      const el = input as HTMLInputElement;
+
+      if (parts.length === 2) {
+        const [vecKey, axis] = parts;
+        if (vecKey === 'position' || vecKey === 'rotation' || vecKey === 'scale') {
+          (entity.transform[vecKey as keyof typeof entity.transform] as any)[axis] = parseFloat(input.value) || 0;
+          return;
+        }
+        
+        // Is it a child property?
+        if (vecKey.includes('__')) {
+            const [parentKey, childKey] = vecKey.split('__');
+            let current = this.resolveNestedArchetypeValue(arch, parentKey);
+            if (!current) return;
+
+            current.overrides = { ...(current.overrides ?? {}) };
+            if (!current.overrides[childKey] || typeof current.overrides[childKey] !== 'object') {
+              current.overrides[childKey] = { x: 0, y: 0, z: 0 };
+            }
+            (current.overrides[childKey] as any)[axis] = parseFloat(el.value) || 0;
+            arch.overrides[parentKey] = current;
+            return;
+        }
+
+        // vec3 override sub-prop
+        if (!arch.overrides[vecKey] || typeof arch.overrides[vecKey] !== 'object') {
+          arch.overrides[vecKey] = { x: 0, y: 0, z: 0 };
+        }
+        (arch.overrides[vecKey] as any)[axis] = parseFloat(input.value) || 0;
+        return;
+      }
+      
+      const key = parts[0];
+      // Base entity props write directly
+      if (key === 'name' || key === 'visible' || key === 'layer') {
+        if (el.type === 'checkbox') (entity as any)[key] = el.checked;
+        else if (el.type === 'number') (entity as any)[key] = parseFloat(el.value) || 0;
+        else (entity as any)[key] = el.value;
+        return;
+      }
+      // Handle nested archetype child properties (key encoded as "parentProp__childProp")
+      if (key.includes('__')) {
+        const [parentKey, childKey] = key.split('__');
+
+        let current = this.resolveNestedArchetypeValue(arch, parentKey);
+        if (!current) return;
+
+        current.overrides = { ...(current.overrides ?? {}) };
+        if (el.type === 'checkbox') current.overrides[childKey] = el.checked;
+        else if (el.type === 'number' || el.type === 'range') current.overrides[childKey] = parseFloat(el.value) || 0;
+        else {
+          let v: any = el.value;
+          try { v = JSON.parse(v); } catch {}
+          current.overrides[childKey] = v;
+        }
+
+        arch.overrides[parentKey] = current;
+        return;
+      }
+
+      // Everything else goes to overrides
+      if ((el as HTMLElement).dataset.objectKind === 'nested_archetype') {
+        const current = isNestedArchetypeValue(arch.overrides[key])
+          ? arch.overrides[key]
+          : createDefaultNestedArchetypeValue();
+        arch.overrides[key] = {
+          ...current,
+          archetypeId: el.value,
+        };
+      } else if (el.type === 'checkbox') arch.overrides[key] = el.checked;
+      else if (el.type === 'number' || el.type === 'range') arch.overrides[key] = parseFloat(el.value) || 0;
+      else if (key === 'targetEntityIds') arch.overrides[key] = el.value.split(',').map((s: string) => s.trim()).filter(Boolean);
+      else arch.overrides[key] = el.value;
+      return;
+    }
 
     // Handle vec3 sub-properties (e.g., "position.x" → entity.transform.position.x)
     if (parts.length === 2) {
@@ -842,6 +1121,7 @@ export class RightPanel {
       trigger: '#cc4488',
       spawn: '#6666ff',
       door: '#ff6600',
+      archetype_instance: '#e8a020',
     };
     return colors[type] || '#888';
   }

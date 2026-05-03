@@ -120,6 +120,7 @@ html, body {
 
 /* ── Editor Body (3-column) ─────────────────────────────────────────── */
 #editor-body {
+  position: relative;
   display: grid;
   grid-template-columns: var(--left-panel-width) 1fr var(--right-panel-width);
   grid-template-areas: "left viewport right";
@@ -1209,12 +1210,57 @@ html, body {
   color: var(--text-primary);
 }
 
+.cam-preview-refresh {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: border-color 120ms ease, color 120ms ease, background 120ms ease;
+}
+
+.cam-preview-refresh:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--accent-blue);
+  color: var(--text-primary);
+}
+
+.cam-preview-refresh:focus-visible {
+  outline: none;
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 2px var(--accent-blue-20);
+}
+
+.cam-preview-refresh:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.cam-preview-refresh svg {
+  width: 14px;
+  height: 14px;
+}
+
 /* Body: transparent so WebGL scissor rect shows through */
 .cam-preview-body {
   position: relative;
   width: 320px;
   height: 180px;
-  background: transparent;
+  background: #06090d;
+  pointer-events: none;
+}
+
+.cam-preview-frame {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+  background: #06090d;
   pointer-events: none;
 }
 

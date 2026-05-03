@@ -16,7 +16,7 @@ export class LeftPanel {
     this.setupKeyboardShortcuts();
   }
 
-  public setMode(mode: 'world' | 'room' | 'height') {
+  public setMode(mode: 'world' | 'room' | 'height' | 'archetypes') {
     const worldTools   = ['tool-btn-door', 'tool-btn-room', 'tool-btn-round', 'tool-btn-translate'];
     const roomTools    = ['tool-btn-translate', 'tool-btn-rotate', 'tool-btn-scale'];
     const heightTools  = ['tool-btn-height-point', 'tool-btn-height-line'];

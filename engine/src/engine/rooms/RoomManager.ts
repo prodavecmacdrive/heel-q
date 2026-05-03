@@ -3,7 +3,7 @@ import { World } from '../ecs/World';
 import { RoomData, EntitySpawnDef, CameraDef, HeightModifier } from './RoomData';
 import { TextureManager } from '../rendering/TextureManager';
 import { SpriteAnimation, AtlasAnimation, Transform, MeshRenderer, DoorMarker, CameraMarker } from '../ecs/Component';
-import { NavGrid } from '../nav/NavGrid';
+import { NavGrid, CELL_SIZE } from '../nav/NavGrid';
 import { Entity } from '../ecs/Entity';
 import { CHARACTER_HEIGHT } from '../constants';
 import type { SpriteSheetMeta } from '@heel-quest/shared-core';
@@ -398,7 +398,11 @@ export class RoomManager {
 
             const projected = corners.map(p => ({ x: p.x, z: p.z }));
             const hull = this.convexHull2D(projected);
-            return { kind: 'polygon', points: hull.length >= 3 ? hull : this.buildThinPolygon(projected, 0.05) };
+            const minHalfThickness = CELL_SIZE * 0.5 + 0.01;
+            return {
+                kind: 'polygon',
+                points: hull.length >= 3 ? hull : this.buildThinPolygon(projected, minHalfThickness)
+            };
         }
 
         // Box / rectangular primitive footprint
@@ -583,12 +587,13 @@ export class RoomManager {
         const color = hasTexture ? new THREE.Color(0xffffff) : new THREE.Color(def.color || '#808080');
         const mat = new THREE.MeshStandardMaterial({
             color,
-            transparent: (def.opacity ?? 1) < 1,
+            transparent: hasTexture || (def.opacity ?? 1) < 1,
             opacity: def.opacity ?? 1,
             roughness: 0.6,
             metalness: 0.1,
             side: THREE.DoubleSide,
             shadowSide: THREE.FrontSide,
+            alphaTest: hasTexture ? 0.1 : 0,
         });
 
         const texturePathValue = def.sequenceSource || def.textureSource;
@@ -691,14 +696,22 @@ export class RoomManager {
             def.lightTargetZ ?? 0,
         );
 
+        const lightRig = new THREE.Group();
+        lightRig.position.copy(position);
+        lightRig.rotation.copy(rotation);
+
         let light: THREE.Light;
         switch (def.lightType) {
             case 'directional': {
                 const dl = new THREE.DirectionalLight(color, intensity);
-                dl.position.copy(position);
-                dl.target.position.copy(worldTarget);
-                this.scene.add(dl.target);
-                dl.target.updateMatrixWorld();
+                dl.position.set(0, 0, 0);
+                dl.target.position.set(
+                    worldTarget.x - position.x,
+                    worldTarget.y - position.y,
+                    worldTarget.z - position.z
+                );
+                lightRig.add(dl);
+                lightRig.add(dl.target);
                 light = dl;
                 break;
             }
@@ -707,24 +720,29 @@ export class RoomManager {
                 sl.angle = THREE.MathUtils.degToRad(def.lightAngle ?? 45);
                 sl.penumbra = def.lightPenumbra ?? 0;
                 sl.decay = decay;
-                sl.position.copy(position);
-                sl.target.position.copy(worldTarget);
-                this.scene.add(sl.target);
-                sl.target.updateMatrixWorld();
+                sl.position.set(0, 0, 0);
+                sl.target.position.set(
+                    worldTarget.x - position.x,
+                    worldTarget.y - position.y,
+                    worldTarget.z - position.z
+                );
+                lightRig.add(sl);
+                lightRig.add(sl.target);
                 light = sl;
                 break;
             }
             case 'rect_area': {
                 const rl = new THREE.RectAreaLight(color, intensity, def.lightRectWidth ?? 1, def.lightRectHeight ?? 1);
-                rl.position.copy(position);
-                rl.rotation.copy(rotation);
+                rl.position.set(0, 0, 0);
+                lightRig.add(rl);
                 light = rl;
                 break;
             }
             default: {
                 const pl = new THREE.PointLight(color, intensity, distance);
                 pl.decay = decay;
-                pl.position.copy(position);
+                pl.position.set(0, 0, 0);
+                lightRig.add(pl);
                 light = pl;
                 break;
             }
@@ -786,7 +804,8 @@ export class RoomManager {
             (light as any).flickerCurrent = intensity;
         }
 
-        this.scene.add(light);
+        this.scene.add(lightRig);
+        lightRig.updateMatrixWorld(true);
     }
 
     private spawnSpriteEntity(def: EntitySpawnDef, floorY: number, isPlayer: boolean, playerSpeed: number = 3.0) {
@@ -1184,7 +1203,8 @@ export class RoomManager {
             cameraIndex: index,
             isDefault: camDef.isDefault,
             targetLookAt: camDef.targetLookAt || '',
-            fov: camDef.fov || 45
+            fov: camDef.fov || 45,
+            sourceId: camDef.id || ''
         });
     }
 

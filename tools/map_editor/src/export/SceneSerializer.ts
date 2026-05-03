@@ -8,8 +8,9 @@
    ═══════════════════════════════════════════════════════════════════════ */
 
 import type { WorldProject } from '../types/scene';
+import type { ArchetypeInstanceEntity } from '../types/entities';
 
-const SCHEMA_VERSION = '1.0.0';
+const SCHEMA_VERSION = '2.0.0';
 
 export interface SaveResult {
   localSaved: boolean;
@@ -40,12 +41,44 @@ export class SceneSerializer {
     const data = JSON.parse(json) as WorldProject;
 
     // Apply defaults for missing fields
-    data.version = data.version || SCHEMA_VERSION;
     data.projectId = data.projectId || 'world';
     data.rooms = data.rooms || [];
     data.doors = data.doors || [];
 
+    // Migrate from schema v1.0.0 — convert legacy entity types to archetype_instance
+    const version = (data as any).version || '1.0.0';
+    if (version < '2.0.0') {
+      for (const room of data.rooms) {
+        if (room.entities) {
+          room.entities = room.entities.map((e: any) =>
+            e.type !== 'archetype_instance' ? SceneSerializer.migrateEntity(e) : e
+          );
+        }
+      }
+    }
+    data.version = SCHEMA_VERSION;
+
     return data;
+  }
+
+  /** Migrate a legacy entity to ArchetypeInstanceEntity format */
+  static migrateEntity(entity: any): ArchetypeInstanceEntity {
+    const { id, name, type, transform, visible, layer, ...rest } = entity;
+    // Map type to _sys: archetype ID: 'animated_sprite' → '_sys:AnimatedSprite'
+    const archetypeId = '_sys:' + (type as string)
+      .split('_')
+      .map((p: string) => p.charAt(0).toUpperCase() + p.slice(1))
+      .join('');
+    return {
+      id,
+      name: name ?? type,
+      type: 'archetype_instance',
+      archetypeId,
+      transform: transform ?? { position: { x: 0, y: 0, z: 0 }, rotation: { x: 0, y: 0, z: 0 }, scale: { x: 1, y: 1, z: 1 } },
+      visible: visible ?? true,
+      layer: layer ?? 0,
+      overrides: rest,
+    };
   }
 
   /** Download the JSON as a file */

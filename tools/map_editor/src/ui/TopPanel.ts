@@ -2,7 +2,7 @@
    TopPanel — Mode Switcher (Room Map / Height Map / World Map)
    ═══════════════════════════════════════════════════════════════════════ */
 
-export type EditorMode = 'room' | 'height' | 'world';
+export type EditorMode = 'room' | 'height' | 'world' | 'archetypes';
 
 export class TopPanel {
   private container: HTMLElement;
@@ -41,6 +41,13 @@ export class TopPanel {
           <path d="M12 2a15.3 15.3 0 0 0-4 10 15.3 15.3 0 0 0 4 10"/>
         </svg>`
       },
+      {
+        key: 'archetypes',
+        label: 'Archetypes',
+        icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/>
+        </svg>`
+      },
     ];
 
     this.container.innerHTML = modes
@@ -77,6 +84,7 @@ export class TopPanel {
         room: 'Room Map Mode',
         height: 'Height Map Mode',
         world: 'World Map Mode',
+        archetypes: 'Archetypes Editor',
       };
       infoEl.textContent = labels[mode];
     }

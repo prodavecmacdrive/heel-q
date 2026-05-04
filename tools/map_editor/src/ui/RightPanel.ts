@@ -687,18 +687,20 @@ export class RightPanel {
     return this.section(title, propsHtml || '<p style="color:#888;font-size:11px;">No properties defined.</p>');
   }
 
-  private getRenderTypeProperties(renderType: string) {
+  private getRenderTypeProperties(renderType?: string) {
+    if (!renderType) return [];
     const systemKey = this.getSystemArchetypeKey(renderType);
     const sysArch = systemKey ? this.archetypeSchema?.archetypes[systemKey] : null;
     return sysArch?.properties ?? [];
   }
 
-  private getSystemArchetypeKey(renderType: string): string | null {
+  private getSystemArchetypeKey(renderType?: string): string | null {
+    if (!renderType) return null;
     const normalized = renderType.replace(/(^|_)([a-z])/g, (_, __, c) => c.toUpperCase());
     return `_sys:${normalized}`;
   }
 
-  private getAssetCategory(renderType: string, propName: string): 'textures' | 'sprites' | 'audio' {
+  private getAssetCategory(renderType: string | undefined, propName: string): 'textures' | 'sprites' | 'audio' {
     if (propName === 'textureSource' || propName === 'sequenceSource' || propName === 'cookieTexture') {
       if (renderType === 'sprite' || renderType === 'animated_sprite') return 'sprites';
       return 'textures';

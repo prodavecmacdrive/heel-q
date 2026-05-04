@@ -106,10 +106,10 @@ export class WorldLoader {
             return [e];
         }
 
-        if (ancestry.has(e.archetypeId)) {
-            console.warn(`[WorldLoader] Recursive nested archetype detected for ${e.archetypeId}; skipping nested expansion.`);
-            return [];
-        }
+            if (ancestry.has(e.archetypeId)) {
+                console.warn(`[WorldLoader] Recursive nested archetype detected for ${e.archetypeId}; skipping nested expansion.`);
+                return [];
+            }
 
         const resolved = resolveArchetypeInstance(e, archetypeSchema);
         if (!resolved) {

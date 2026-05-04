@@ -30,6 +30,30 @@ export type ArchetypePropertyType =
 
 export type ArchetypeObjectKind = 'nested_archetype';
 
+/** Entity types that can be placed as visual children inside an archetype. */
+export type ChildEntityType =
+  | 'primitive'
+  | 'light'
+  | 'sprite'
+  | 'animated_sprite'
+  | 'sound'
+  | 'trigger';
+
+/**
+ * A visual child object embedded inside an archetype definition.
+ * Each child has a local transform relative to the archetype origin and
+ * entity-type-specific properties stored in the `props` bag.
+ */
+export interface ArchetypeChildDef {
+  id: string;
+  name: string;
+  entityType: ChildEntityType;
+  transform: BaseEntity['transform'];
+  visible: boolean;
+  /** Flat entity-specific fields (e.g. color, geometryType, intensity…) */
+  props: Record<string, unknown>;
+}
+
 export interface NestedArchetypeValue {
   archetypeId: string;
   transform?: BaseEntity['transform'];
@@ -57,13 +81,18 @@ export interface ArchetypeSockets {
 export interface ArchetypeDef {
   category: string;
   description: string;
-  /** Maps to an existing EntityType renderType for engine spawning */
-  renderType: string;
+  /**
+   * @deprecated Only present on legacy and `_sys:` archetypes.
+   * New user archetypes use `children[]` and have no render type.
+   */
+  renderType?: string;
   /** Default transform applied when placing a new archetype instance in a room. */
   defaultTransform?: BaseEntity['transform'];
   sockets: ArchetypeSockets;
   properties: ArchetypePropertyDef[];
   defaultVerbs: string[];
+  /** Visual child objects that form this archetype's 3-D representation. */
+  children: ArchetypeChildDef[];
 }
 
 export interface ArchetypeSchema {
@@ -371,6 +400,37 @@ export function createDefaultNestedArchetypeValue(archetypeId: string = ''): Nes
   };
 }
 
+/** Returns default props for a given child entity type. */
+function getDefaultChildProps(type: ChildEntityType): Record<string, unknown> {
+  switch (type) {
+    case 'primitive':
+      return { geometryType: 'cube', materialType: 'color', color: '#808080', isCollider: false, opacity: 1, textureSource: '', uvTilingX: 1, uvTilingY: 1, uvOffsetX: 0, uvOffsetY: 0, castShadows: false, receiveShadows: true };
+    case 'light':
+      return { lightType: 'point', color: '#ffffff', intensity: 1, distance: 10, decay: 2, angle: 45, penumbra: 0, targetPosition: { x: 0, y: 0, z: 0 }, castShadows: false, shadowResolution: 512, shadowBias: 0, shadowNormalBias: 0.15, shadowRadius: 1, cookieTexture: '', flickerMode: 'none', flickerSpeed: 1, flickerAmplitude: 0.1, flickerDecay: 0.5, flickerPattern: '[0,1]', rectWidth: 1, rectHeight: 1 };
+    case 'sprite':
+      return { textureSource: '', normalMap: '', depthMap: '', blendMode: 'normal', castShadows: false, receiveShadows: false, billboardMode: 'face_camera' };
+    case 'animated_sprite':
+      return { textureSource: '', normalMap: '', depthMap: '', blendMode: 'normal', castShadows: false, receiveShadows: false, billboardMode: 'face_camera', framesCount: 1, columns: 1, rows: 1, fps: 12, loop: true, autoplay: true };
+    case 'sound':
+      return { audioSource: '', volume: 1, loop: true, spatialAudio: true, refDistance: 1, maxDistance: 20 };
+    case 'trigger':
+      return { shape: 'box', extents: { x: 1, y: 1, z: 1 }, onEnterEvent: '', onLeaveEvent: '', triggerOnce: false, conditionType: 'always', conditionValue: '', targetEntityIds: [], payload: '' };
+    default:
+      return {};
+  }
+}
+
+export function createDefaultChildDef(entityType: ChildEntityType, name?: string): ArchetypeChildDef {
+  return {
+    id: generateId('child'),
+    name: name || entityType,
+    entityType,
+    transform: createDefaultTransform(),
+    visible: true,
+    props: getDefaultChildProps(entityType),
+  };
+}
+
 export function isNestedArchetypeValue(value: unknown): value is NestedArchetypeValue {
   return Boolean(
     value &&
@@ -426,6 +486,29 @@ export function getNestedArchetypeInstances(
       layer: rawValue.layer ?? entity.layer,
       overrides: { ...(rawValue.overrides ?? {}) },
     });
+  }
+
+  // New-style archetypes may declare `children: ArchetypeChildDef[]` which
+  // represent visual child objects that should be spawned when the archetype
+  // instance is expanded. Convert each child into a concrete EditorEntity
+  // object so the engine's loader will map and spawn them.
+  const archAny: any = archetype as any;
+  if (Array.isArray(archAny.children) && archAny.children.length > 0) {
+    for (const child of archAny.children) {
+      // Build a pseudo-entity from the child definition. Child props are
+      // spread onto the entity so `mapEntity()` can pick them up.
+      const childEntity: any = {
+        id: generateId('child'),
+        name: `${entity.name}:${child.name}`,
+        type: child.entityType,
+        transform: child.transform,
+        visible: (entity.visible ?? true) && (child.visible ?? true),
+        layer: child.layer ?? entity.layer,
+        // copy child props into top-level fields
+        ...(child.props ?? {}),
+      };
+      nestedInstances.push(childEntity as any as ArchetypeInstanceEntity);
+    }
   }
 
   return nestedInstances;

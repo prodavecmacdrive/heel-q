@@ -18,6 +18,7 @@ import type {
   DoorEntity,
   ArchetypeSchema,
   ArchetypeInstanceEntity,
+  ArchetypeChildDef,
 } from '../types/entities';
 import { getNestedArchetypeInstances, resolveArchetypeInstance } from '../types/entities';
 
@@ -599,24 +600,37 @@ export class EntityFactory {
   // ── Archetype Instance ─────────────────────────────────────────────
 
   /**
-   * Creates ONLY the root visual for an archetype instance, without any nested
-   * archetype children.  Used by the ArchetypeVisualEditorPanel so each item
-   * can be an independently selectable/movable object in the scene.
-   *
-   * Returns a neutral Group whose origin is the entity's logical position.
-   * Internal mesh offsets (e.g. primitive +0.5 floor offset, billboard sprite +1)
-   * are kept inside the group as children so the gizmo always reads/writes a
-   * clean (0,0,0)-based transform.
+   * Creates the visual representation for an archetype instance, including all
+   * its children. Used by the Visual Editor panel to populate the scene.
+   * Returns an empty Group for archetypes that have no children defined.
    */
   public createRootOnly(entity: ArchetypeInstanceEntity): THREE.Object3D {
     if (!this.archetypeSchema) return this.createGenericPlaceholder(entity);
-    const resolved = resolveArchetypeInstance(entity, this.archetypeSchema);
-    if (!resolved) return this.createGenericPlaceholder(entity);
-    // Wrap in a group so internal mesh Y-offsets don't pollute the stored transform.
-    const wrapper = new THREE.Group();
-    wrapper.add(this.createResolvedRenderable(resolved as unknown as EditorEntity));
-    this.applyChildTransforms(wrapper, entity.overrides);
-    return wrapper;
+    const arch = this.archetypeSchema.archetypes[entity.archetypeId];
+    if (!arch) return this.createGenericPlaceholder(entity);
+
+    // New model: use children[]
+    if (arch.children && arch.children.length > 0) {
+      const group = new THREE.Group();
+      for (const childDef of arch.children) {
+        try {
+          group.add(this.createFromChildDef(childDef));
+        } catch { /* skip bad children */ }
+      }
+      return group;
+    }
+
+    // Legacy renderType model
+    if (arch.renderType) {
+      const resolved = resolveArchetypeInstance(entity, this.archetypeSchema);
+      if (!resolved) return this.createGenericPlaceholder(entity);
+      const wrapper = new THREE.Group();
+      wrapper.add(this.createResolvedRenderable(resolved as unknown as EditorEntity));
+      this.applyChildTransforms(wrapper, entity.overrides);
+      return wrapper;
+    }
+
+    return this.createGenericPlaceholder(entity);
   }
 
   private createArchetypeInstance(entity: ArchetypeInstanceEntity): THREE.Object3D {
@@ -631,36 +645,70 @@ export class EntityFactory {
       return this.createGenericPlaceholder(entity);
     }
 
-    const resolved = resolveArchetypeInstance(entity, this.archetypeSchema);
-    if (!resolved) {
+    const arch = this.archetypeSchema.archetypes[entity.archetypeId];
+    if (!arch) {
       return this.createGenericPlaceholder(entity);
     }
 
-    // Wrap the renderable in a neutral Group so that internal per-type mesh
-    // offsets (e.g. primitive bottom-floor +0.5, billboard sprite +1) remain
-    // isolated as children. applyTransform then acts on the group's origin,
-    // which matches the coordinate system used by the visual editor gizmo.
-    const renderableWrapper = new THREE.Group();
-    renderableWrapper.add(this.createResolvedRenderable(resolved as unknown as EditorEntity));
-
     const group = new THREE.Group();
-    group.add(renderableWrapper);
 
-    const nextAncestry = new Set(ancestry);
-    nextAncestry.add(entity.archetypeId);
-    for (const child of getNestedArchetypeInstances(entity, this.archetypeSchema)) {
-      const childNode = this.createArchetypeInstanceNode(child, nextAncestry);
-      this.applyTransform(childNode, child.transform);
-      group.add(childNode);
+    // ── New model: children[] ───────────────────────────────────────────
+    if (arch.children && arch.children.length > 0) {
+      for (const childDef of arch.children) {
+        try {
+          const childMesh = this.createFromChildDef(childDef);
+          group.add(childMesh);
+        } catch (err) {
+          console.warn(`[EntityFactory] Failed to create archetype child "${childDef.name}":`, err);
+        }
+      }
+      return group;
     }
 
-    // Apply per-child overrides saved by the visual editor. The editor writes
-    // nestedValue.overrides.__childTransforms = { "path/to/node": { transform } }
-    // where path segments are '/'-separated object names. We walk those entries
-    // and apply the stored transform to the matching object inside the group.
-    this.applyChildTransforms(group, entity.overrides);
+    // ── Legacy model: renderType + nested archetype properties ──────────
+    if (arch.renderType) {
+      const resolved = resolveArchetypeInstance(entity, this.archetypeSchema);
+      if (!resolved) return this.createGenericPlaceholder(entity);
 
-    return group;
+      const renderableWrapper = new THREE.Group();
+      renderableWrapper.add(this.createResolvedRenderable(resolved as unknown as EditorEntity));
+      group.add(renderableWrapper);
+
+      const nextAncestry = new Set(ancestry);
+      nextAncestry.add(entity.archetypeId);
+      for (const child of getNestedArchetypeInstances(entity, this.archetypeSchema)) {
+        const childNode = this.createArchetypeInstanceNode(child, nextAncestry);
+        this.applyTransform(childNode, child.transform);
+        group.add(childNode);
+      }
+      this.applyChildTransforms(group, entity.overrides);
+      return group;
+    }
+
+    // Archetype has no children and no renderType — empty pivot placeholder
+    return this.createGenericPlaceholder(entity);
+  }
+
+  /**
+   * Creates a Three.js Object3D from an ArchetypeChildDef.
+   * The returned object already has its local transform applied.
+   */
+  public createFromChildDef(childDef: ArchetypeChildDef): THREE.Object3D {
+    const entity = {
+      id: childDef.id,
+      name: childDef.name,
+      type: childDef.entityType,
+      transform: childDef.transform,
+      visible: childDef.visible,
+      layer: 0,
+      ...childDef.props,
+    } as EditorEntity;
+
+    const obj = this.createResolvedRenderable(entity);
+    obj.name = childDef.name;
+    obj.userData.childDefId = childDef.id;
+    this.applyTransform(obj, childDef.transform);
+    return obj;
   }
 
   private applyChildTransforms(root: THREE.Object3D, overrides: Record<string, unknown> | undefined): void {

@@ -934,8 +934,9 @@ export class ArchetypeVisualEditorPanel {
       if (!ownerPropName) return;
       const prop = this.workingArch.properties.find(p => p.name === ownerPropName);
       if (!prop || !isNestedArchetypeValue(prop.default)) return;
-
       const nv = prop.default as NestedArchetypeValue;
+      // If the nested slot has no archetype selected, do not persist child transforms.
+      if (!nv.archetypeId) return;
       const overrides: Record<string, unknown> = { ...(nv.overrides ?? {}) };
 
       // Build a stable name-path for the child by walking up the object tree
@@ -969,6 +970,8 @@ export class ArchetypeVisualEditorPanel {
     if (!prop || !isNestedArchetypeValue(prop.default)) return;
 
     const nv = prop.default as NestedArchetypeValue;
+    // Only persist transforms for nested slots that actually reference an archetype
+    if (!nv.archetypeId) return;
     nv.transform = {
       position: {
         x: item.mesh.position.x,

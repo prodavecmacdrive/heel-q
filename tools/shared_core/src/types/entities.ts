@@ -151,6 +151,7 @@ export interface SpriteEntity extends BaseEntity {
   castShadows: boolean;
   receiveShadows: boolean;
   billboardMode: BillboardMode;
+  isCollider: boolean;
 }
 
 export interface AnimatedSpriteEntity extends BaseEntity {
@@ -162,6 +163,7 @@ export interface AnimatedSpriteEntity extends BaseEntity {
   castShadows: boolean;
   receiveShadows: boolean;
   billboardMode: BillboardMode;
+  isCollider: boolean;
   framesCount: number;
   columns: number;
   rows: number;
@@ -408,9 +410,9 @@ function getDefaultChildProps(type: ChildEntityType): Record<string, unknown> {
     case 'light':
       return { lightType: 'point', color: '#ffffff', intensity: 1, distance: 10, decay: 2, angle: 45, penumbra: 0, targetPosition: { x: 0, y: 0, z: 0 }, castShadows: false, shadowResolution: 512, shadowBias: 0, shadowNormalBias: 0.15, shadowRadius: 1, cookieTexture: '', flickerMode: 'none', flickerSpeed: 1, flickerAmplitude: 0.1, flickerDecay: 0.5, flickerPattern: '[0,1]', rectWidth: 1, rectHeight: 1 };
     case 'sprite':
-      return { textureSource: '', normalMap: '', depthMap: '', blendMode: 'normal', castShadows: false, receiveShadows: false, billboardMode: 'face_camera' };
+      return { textureSource: '', normalMap: '', depthMap: '', blendMode: 'normal', castShadows: false, receiveShadows: false, billboardMode: 'face_camera', isCollider: false };
     case 'animated_sprite':
-      return { textureSource: '', normalMap: '', depthMap: '', blendMode: 'normal', castShadows: false, receiveShadows: false, billboardMode: 'face_camera', framesCount: 1, columns: 1, rows: 1, fps: 12, loop: true, autoplay: true };
+      return { textureSource: '', normalMap: '', depthMap: '', blendMode: 'normal', castShadows: false, receiveShadows: false, billboardMode: 'face_camera', isCollider: false, framesCount: 1, columns: 1, rows: 1, fps: 12, loop: true, autoplay: true };
     case 'sound':
       return { audioSource: '', volume: 1, loop: true, spatialAudio: true, refDistance: 1, maxDistance: 20 };
     case 'trigger':
@@ -444,11 +446,57 @@ export function composeTransforms(
   child?: BaseEntity['transform'],
 ): BaseEntity['transform'] {
   const local = child ?? createDefaultTransform();
+
+  const toRadians = (degrees: number) => degrees * Math.PI / 180;
+  const rotatePoint = (point: Vec3, rotation: Vec3): Vec3 => {
+    let x = point.x;
+    let y = point.y;
+    let z = point.z;
+
+    const rx = toRadians(rotation.x);
+    const ry = toRadians(rotation.y);
+    const rz = toRadians(rotation.z);
+
+    // X-axis rotation
+    let cosX = Math.cos(rx);
+    let sinX = Math.sin(rx);
+    let y1 = y * cosX - z * sinX;
+    let z1 = y * sinX + z * cosX;
+    y = y1;
+    z = z1;
+
+    // Y-axis rotation
+    let cosY = Math.cos(ry);
+    let sinY = Math.sin(ry);
+    let x1 = x * cosY + z * sinY;
+    let z2 = -x * sinY + z * cosY;
+    x = x1;
+    z = z2;
+
+    // Z-axis rotation
+    let cosZ = Math.cos(rz);
+    let sinZ = Math.sin(rz);
+    let x2 = x * cosZ - y * sinZ;
+    let y2 = x * sinZ + y * cosZ;
+    x = x2;
+    y = y2;
+
+    return { x, y, z };
+  };
+
+  const scaledLocalPosition = {
+    x: local.position.x * parent.scale.x,
+    y: local.position.y * parent.scale.y,
+    z: local.position.z * parent.scale.z,
+  };
+
+  const rotatedLocalPosition = rotatePoint(scaledLocalPosition, parent.rotation);
+
   return {
     position: {
-      x: parent.position.x + local.position.x,
-      y: parent.position.y + local.position.y,
-      z: parent.position.z + local.position.z,
+      x: parent.position.x + rotatedLocalPosition.x,
+      y: parent.position.y + rotatedLocalPosition.y,
+      z: parent.position.z + rotatedLocalPosition.z,
     },
     rotation: {
       x: parent.rotation.x + local.rotation.x,
@@ -542,10 +590,10 @@ export function createDefaultEntity(type: EntityType, name?: string): EditorEnti
 
   switch (type) {
     case 'sprite':
-      return { ...base, type: 'sprite', textureSource: '', normalMap: '', depthMap: '', blendMode: 'normal', castShadows: false, receiveShadows: false, billboardMode: 'fixed' };
+      return { ...base, type: 'sprite', textureSource: '', normalMap: '', depthMap: '', blendMode: 'normal', castShadows: false, receiveShadows: false, billboardMode: 'face_camera', isCollider: false };
 
     case 'animated_sprite':
-      return { ...base, type: 'animated_sprite', textureSource: '', normalMap: '', depthMap: '', blendMode: 'normal', castShadows: false, receiveShadows: false, billboardMode: 'fixed', framesCount: 1, columns: 1, rows: 1, fps: 12, loop: true, autoplay: true };
+      return { ...base, type: 'animated_sprite', textureSource: '', normalMap: '', depthMap: '', blendMode: 'normal', castShadows: false, receiveShadows: false, billboardMode: 'face_camera', isCollider: false, framesCount: 1, columns: 1, rows: 1, fps: 12, loop: true, autoplay: true };
 
     case 'primitive':
       return { ...base, type: 'primitive', geometryType: 'cube', materialType: 'color', color: '#808080', isCollider: true, opacity: 0.5, textureSource: '', uvTilingX: 1, uvTilingY: 1, uvOffsetX: 0, uvOffsetY: 0, sequenceSource: '', sequenceJson: '', activeAnimation: '', playbackSpeed: 1, sequenceLoop: true, sequenceAutoplay: true, castShadows: false, receiveShadows: true };

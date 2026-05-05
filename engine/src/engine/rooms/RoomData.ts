@@ -10,6 +10,11 @@ export interface EntitySpawnDef {
     /** XZ half-extents for obstacle blocking (defaults to width/2 × 0.5) */
     obstacleHalfWidth?: number;
     obstacleHalfDepth?: number;
+    /** Billboard mode forwarded from the sprite entity ('y_axis' | 'face_camera' | 'fixed') */
+    billboardMode?: string;
+    /** Foot anchor: fraction (0–1) from the BOTTOM of the sprite frame where the feet are.
+     *  0 = feet at the very bottom (default). 0.3 = 30 % from bottom (atlas with bottom padding). */
+    feetAnchor?: number;
     /** Entity type from editor: 'sprite' | 'animated_sprite' | 'primitive' | 'light' | 'door' */
     entityType?: string;
     /** For primitives: geometry type */

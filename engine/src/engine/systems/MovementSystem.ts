@@ -50,20 +50,15 @@ export class MovementSystem extends System {
                     transform.position.z += (dz / dist) * move;
                     player.isMoving = true;
                 }
-
-                // Lock Y to terrain surface at current XZ
-                transform.position.y = this.roomManager.getFloorY(
-                    transform.position.x, transform.position.z
-                ) + player.floorY;  // player.floorY is the offset above terrain (normally 0)
             } else {
                 player.isMoving = false;
             }
 
-            // Sync animation state
-            const anim = this.world.getComponent(entity, 'SpriteAnimation');
-            if (anim) {
-                (anim as SpriteAnimation).state = player.isMoving ? 'walk' : 'idle';
-            }
+            // Always keep the player feet locked to the terrain, even when stopped.
+            transform.position.y = this.roomManager.getFloorY(
+                transform.position.x, transform.position.z
+            ) + player.floorY;  // player.floorY is the offset above terrain (normally 0)
         }
     }
 }
+

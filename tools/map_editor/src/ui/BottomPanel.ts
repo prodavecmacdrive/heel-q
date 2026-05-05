@@ -277,6 +277,24 @@ export class BottomPanel {
       },
     ];
 
+    // Sprite card — separate entity type, always face_camera billboard plane
+    const spriteCard = `
+      <div class="browser-card card-sprite" draggable="true"
+           data-entity-type="sprite"
+           id="prim-card-sprite">
+        <div class="browser-card-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <rect x="4" y="3" width="16" height="18" rx="1"/>
+            <line x1="4" y1="8" x2="20" y2="8"/>
+            <circle cx="8.5" cy="5.5" r="1"/>
+            <path d="M20 14l-4-4-4 5-3-2-5 5"/>
+          </svg>
+        </div>
+        <span class="browser-card-label">Sprite</span>
+        <span class="browser-card-tag">billboard</span>
+      </div>
+    `;
+
     return `<div class="browser-grid">
       ${prims.map(p => `
         <div class="browser-card card-${p.sub}" draggable="true"
@@ -286,6 +304,7 @@ export class BottomPanel {
           <span class="browser-card-label">${p.name}</span>
         </div>
       `).join('')}
+      ${spriteCard}
     </div>`;
   }
 

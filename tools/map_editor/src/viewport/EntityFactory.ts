@@ -134,6 +134,8 @@ export class EntityFactory {
       new THREE.EdgesGeometry(geo),
       new THREE.LineBasicMaterial({ color: 0x88aacc, transparent: true, opacity: 0.5 })
     );
+    wire.userData = wire.userData || {};
+    wire.userData.__outlineSelectable = true;
     mesh.add(wire);
 
     const billboardMode = entity.billboardMode || 'fixed';
@@ -226,6 +228,11 @@ export class EntityFactory {
       new THREE.EdgesGeometry(geo),
       new THREE.LineBasicMaterial({ color: 0x58a6ff, transparent: true, opacity: 0.3 })
     );
+    // Mark edges as the visual outline so the editor can make outlines the
+    // only clickable target for composite archetype children. Keep them
+    // pickable by leaving raycast intact and tagging with __outlineSelectable.
+    edges.userData = edges.userData || {};
+    edges.userData.__outlineSelectable = true;
     mesh.add(edges);
 
     return mesh;
@@ -235,6 +242,11 @@ export class EntityFactory {
 
   private createCameraHelper(_entity: CameraEntity): THREE.Object3D {
     const group = new THREE.Group();
+    // Mark this group as an archetype root so selection logic can detect
+    // composite instances and prefer outline hits instead of selecting
+    // the entire object when the user clicks inside child geometry.
+    group.userData = group.userData || {};
+    group.userData.__isArchetypeRoot = true;
 
     // Camera body (small box)
     const bodyGeo = new THREE.BoxGeometry(0.6, 0.4, 0.5);
@@ -381,35 +393,20 @@ export class EntityFactory {
       targetSphere.userData.isLightTarget = true;
       targetSphere.userData.parentEntityId = entity.id;
 
-      // Direction line from origin to target
-      const lineGeo = new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(0, 0, 0),
-        targetSphere.position.clone(),
-      ]);
-      const lineMaterial = new THREE.LineBasicMaterial({ color: 0xffcc00, transparent: true, opacity: 0.7 });
-      const line = new THREE.Line(lineGeo, lineMaterial);
-      line.visible = true;
-
       const defaultDir = new THREE.Vector3(0, 0, -1);
       const targetDir = targetSphere.position.clone();
       const hasTarget = targetDir.lengthSq() > 1e-6;
-      // Arrow should point in the light's forward direction. The vector from
-      // the light origin to the target describes where the light is aiming;
-      // ArrowHelper expects a direction vector pointing away from origin along
-      // the arrow. For directional/spot lights the visual direction should be
-      // from the light origin TOWARDS the target, so we use that vector but
-      // negate it to match the conventional light-forward direction used
-      // elsewhere in the editor (and to correct the previous inversion).
-      const dir = hasTarget ? targetDir.clone().normalize().multiplyScalar(-1) : defaultDir.clone().multiplyScalar(-1);
-      const length = hasTarget ? targetDir.length() : 2;
-      const arrow = new THREE.ArrowHelper(dir, new THREE.Vector3(0, 0, 0), length, 0xffcc00, 0.15, 0.08);
+      // Arrow should point from the light origin TOWARDS the target. Use the
+      // target vector (local) directly so the visual matches the SpotLight's
+      // actual target direction in the engine.
+      const dir = hasTarget ? targetDir.clone().normalize() : defaultDir.clone();
+      const arrow = new THREE.ArrowHelper(dir, new THREE.Vector3(0, 0, 0), 0.25, 0xffcc00, 0.08, 0.04);
       arrow.visible = true;
       group.add(arrow);
 
-      group.add(line);
       group.add(targetSphere);
       group.userData.targetSphere = targetSphere;
-      group.userData.targetLine = line;
+      group.userData.targetArrow = arrow;
     }
 
     return group;
@@ -579,6 +576,8 @@ export class EntityFactory {
       new THREE.EdgesGeometry(geo),
       new THREE.LineBasicMaterial({ color: 0xff6600, transparent: true, opacity: 0.4 })
     );
+    edges.userData = edges.userData || {};
+    edges.userData.__outlineSelectable = true;
     mesh.add(edges);
 
     group.add(mesh);

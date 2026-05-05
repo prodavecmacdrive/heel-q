@@ -875,12 +875,12 @@ export class EditorApp {
     for (const [id, mesh] of this.meshMap) {
       const helper = mesh.userData.lightHelper as THREE.Object3D | undefined;
       const targetSphere = mesh.userData.targetSphere as THREE.Object3D | undefined;
-      const targetLine = mesh.userData.targetLine as THREE.Object3D | undefined;
+      const targetArrow = mesh.userData.targetArrow as THREE.Object3D | undefined;
       const isSelectedLight = id === selectedEntityId && this.entityMap.get(id)?.type === 'light';
 
       if (helper) helper.visible = Boolean(isSelectedLight);
       if (targetSphere) targetSphere.visible = Boolean(isSelectedLight);
-      if (targetLine) targetLine.visible = Boolean(isSelectedLight);
+      if (targetArrow) targetArrow.visible = true;
     }
   }
 
@@ -1033,18 +1033,8 @@ export class EditorApp {
   private createEntityFromDragData(dragData: DragData): EditorEntity {
     const isTextureAsset = dragData.assetPath && this.isTextureAssetPath(dragData.assetPath);
 
-    // textures/ assets → primitive plane (engine respects full 3D transform)
-    if (isTextureAsset && dragData.assetPath!.startsWith('textures/')) {
-      const entity = createDefaultEntity('primitive') as PrimitiveEntity;
-      entity.geometryType = 'plane';
-      entity.materialType = 'textured';
-      entity.textureSource = dragData.assetPath!;
-      entity.opacity = 1;
-      return entity;
-    }
-
-    // sprites/ assets → billboard sprite (face_camera)
-    if (isTextureAsset && (dragData.entityType === 'sprite' || dragData.entityType === 'animated_sprite')) {
+    // Any texture (textures/ or sprites/) dragged onto the room → billboard sprite (face_camera)
+    if (isTextureAsset) {
       const sprite = createDefaultEntity('sprite') as SpriteEntity;
       sprite.textureSource = dragData.assetPath!;
       sprite.billboardMode = 'face_camera';
@@ -1052,6 +1042,11 @@ export class EditorApp {
     }
 
     const entity = createDefaultEntity(dragData.entityType as EntityType);
+
+    // Sprite entities placed from the primitives panel (no asset) are always face_camera
+    if (entity.type === 'sprite' || entity.type === 'animated_sprite') {
+      (entity as SpriteEntity).billboardMode = 'face_camera';
+    }
 
     if (entity.type === 'primitive' && dragData.subType) {
       (entity as PrimitiveEntity).geometryType = dragData.subType as any;

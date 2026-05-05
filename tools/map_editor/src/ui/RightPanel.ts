@@ -336,6 +336,7 @@ export class RightPanel {
       ${this.propInput('depthMap', 'Depth Map', e.depthMap)}
       ${this.propSelect('blendMode', 'Blend Mode', e.blendMode, ['normal', 'additive', 'multiply'])}
       ${this.propSelect('billboardMode', 'Billboard', e.billboardMode, ['fixed', 'face_camera', 'y_axis'])}
+      ${this.propCheckbox('isCollider', 'Collision', e.isCollider ?? false)}
       ${this.propCheckbox('castShadows', 'Cast Shadows', e.castShadows)}
       ${this.propCheckbox('receiveShadows', 'Recv Shadows', e.receiveShadows)}
     `);
@@ -345,6 +346,7 @@ export class RightPanel {
     const a = e as import('../types/entities').AnimatedSpriteEntity;
     return this.section('Animation', `
       ${this.propAsset('textureSource', 'Texture', a.textureSource, 'sprites')}
+      ${this.propCheckbox('isCollider', 'Collision', a.isCollider ?? false)}
       ${this.propNumber('framesCount', 'Frames', a.framesCount, 0)}
       ${this.propNumber('columns', 'Columns', a.columns, 0)}
       ${this.propNumber('rows', 'Rows', a.rows, 0)}

@@ -53,64 +53,12 @@
       ],
       "entities": [
         {
-          "id": "light_momawrbd_1",
-          "name": "New light",
-          "type": "archetype_instance",
-          "archetypeId": "_sys:Light",
-          "transform": {
-            "position": {
-              "x": -3.198,
-              "y": 1.433,
-              "z": 2.773
-            },
-            "rotation": {
-              "x": -154.39,
-              "y": 76.19,
-              "z": -169.94
-            },
-            "scale": {
-              "x": 1,
-              "y": 1,
-              "z": 1
-            }
-          },
-          "visible": true,
-          "layer": 0,
-          "overrides": {
-            "lightType": "spot",
-            "color": "#b3bad6",
-            "intensity": 30,
-            "distance": 20,
-            "decay": 2,
-            "angle": 45,
-            "penumbra": 0,
-            "targetPosition": {
-              "x": 0,
-              "y": 0,
-              "z": 0
-            },
-            "castShadows": true,
-            "shadowResolution": 1024,
-            "shadowBias": 0,
-            "shadowNormalBias": 0.15,
-            "shadowRadius": 1,
-            "cookieTexture": "",
-            "flickerMode": "pattern",
-            "flickerSpeed": 21,
-            "flickerAmplitude": 61.1,
-            "flickerDecay": 10.5,
-            "flickerPattern": "[0,1,0,0,0,0,1,0,0,0,1,1,1]",
-            "rectWidth": 1,
-            "rectHeight": 1
-          }
-        },
-        {
           "id": "spawn_monqpsl7_3",
           "name": "New spawn",
           "type": "spawn",
           "transform": {
             "position": {
-              "x": 0.188,
+              "x": -2.048,
               "y": 0.042,
               "z": -3.736
             },
@@ -198,55 +146,13 @@
           "receiveShadow": true
         },
         {
-          "id": "primitive_monsnc3n_3",
-          "name": "New primitive",
-          "type": "primitive",
-          "transform": {
-            "position": {
-              "x": -3.5,
-              "y": 0.988,
-              "z": -4.5
-            },
-            "rotation": {
-              "x": 0,
-              "y": 0,
-              "z": 0
-            },
-            "scale": {
-              "x": 1,
-              "y": 1,
-              "z": 1
-            }
-          },
-          "visible": true,
-          "layer": 0,
-          "geometryType": "plane",
-          "materialType": "textured",
-          "color": "#808080",
-          "isCollider": true,
-          "opacity": 0.99,
-          "textureSource": "textures/key.png",
-          "uvTilingX": 1,
-          "uvTilingY": 1,
-          "uvOffsetX": 0,
-          "uvOffsetY": 0,
-          "sequenceSource": "",
-          "sequenceJson": "",
-          "activeAnimation": "",
-          "playbackSpeed": 1,
-          "sequenceLoop": true,
-          "sequenceAutoplay": true,
-          "castShadows": true,
-          "receiveShadows": true
-        },
-        {
           "id": "camera_monyet67_1",
           "name": "New camera",
           "type": "camera",
           "transform": {
             "position": {
-              "x": -1.69,
-              "y": 1.876,
+              "x": -0.036,
+              "y": 1.944,
               "z": 1.247
             },
             "rotation": {
@@ -275,14 +181,14 @@
           "type": "camera",
           "transform": {
             "position": {
-              "x": -5.168,
-              "y": 1.331,
-              "z": 0.46
+              "x": -5.678,
+              "y": 7.448,
+              "z": -1.677
             },
             "rotation": {
-              "x": 0,
-              "y": -44,
-              "z": 0
+              "x": -90.91,
+              "y": -23.41,
+              "z": -92.29
             },
             "scale": {
               "x": 1,
@@ -300,40 +206,14 @@
           "targetLookAt": ""
         },
         {
-          "id": "arch_moqlqmpn_1",
-          "name": "table",
-          "type": "archetype_instance",
-          "archetypeId": "table",
-          "transform": {
-            "position": {
-              "x": -0.456,
-              "y": 0.438,
-              "z": -4.806
-            },
-            "rotation": {
-              "x": 0,
-              "y": 0,
-              "z": 0
-            },
-            "scale": {
-              "x": 1,
-              "y": 0.482,
-              "z": 0.398
-            }
-          },
-          "visible": true,
-          "layer": 0,
-          "overrides": {}
-        },
-        {
           "id": "light_moqlrtqb_2",
           "name": "New light",
           "type": "light",
           "transform": {
             "position": {
-              "x": 1.5,
-              "y": 2.955,
-              "z": -2.5
+              "x": 1.077,
+              "y": 3.269,
+              "z": -0.876
             },
             "rotation": {
               "x": 0,
@@ -373,13 +253,479 @@
           "flickerPattern": "[0,1,0,1]",
           "rectWidth": 1,
           "rectHeight": 1
+        },
+        {
+          "id": "primitive_moryfs2o_1",
+          "name": "New primitive",
+          "type": "primitive",
+          "transform": {
+            "position": {
+              "x": 2.762,
+              "y": 1.465,
+              "z": -4.977
+            },
+            "rotation": {
+              "x": -53.53,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1.541,
+              "y": 1.761,
+              "z": 1.502
+            }
+          },
+          "visible": true,
+          "layer": 0,
+          "geometryType": "cube",
+          "materialType": "color",
+          "color": "#808080",
+          "isCollider": true,
+          "opacity": 0.99,
+          "textureSource": "",
+          "uvTilingX": 1,
+          "uvTilingY": 1,
+          "uvOffsetX": 0,
+          "uvOffsetY": 0,
+          "sequenceSource": "",
+          "sequenceJson": "",
+          "activeAnimation": "",
+          "playbackSpeed": 1,
+          "sequenceLoop": true,
+          "sequenceAutoplay": true,
+          "castShadows": true,
+          "receiveShadows": true
+        },
+        {
+          "id": "primitive_morygsq3_2",
+          "name": "New primitive",
+          "type": "primitive",
+          "transform": {
+            "position": {
+              "x": 3.762,
+              "y": 1.465,
+              "z": -3.977
+            },
+            "rotation": {
+              "x": -50.69,
+              "y": 20.23,
+              "z": -15.8
+            },
+            "scale": {
+              "x": 1.541,
+              "y": 1.761,
+              "z": 1.502
+            }
+          },
+          "visible": true,
+          "layer": 0,
+          "geometryType": "cube",
+          "materialType": "color",
+          "color": "#808080",
+          "isCollider": true,
+          "opacity": 0.99,
+          "textureSource": "",
+          "uvTilingX": 1,
+          "uvTilingY": 1,
+          "uvOffsetX": 0,
+          "uvOffsetY": 0,
+          "sequenceSource": "",
+          "sequenceJson": "",
+          "activeAnimation": "",
+          "playbackSpeed": 1,
+          "sequenceLoop": true,
+          "sequenceAutoplay": true,
+          "castShadows": true,
+          "receiveShadows": true
+        },
+        {
+          "id": "primitive_morygwu2_3",
+          "name": "New primitive",
+          "type": "primitive",
+          "transform": {
+            "position": {
+              "x": 3.762,
+              "y": 1.808,
+              "z": -2.37
+            },
+            "rotation": {
+              "x": -53.53,
+              "y": 0,
+              "z": -23.05
+            },
+            "scale": {
+              "x": 1.541,
+              "y": 1.761,
+              "z": 1.502
+            }
+          },
+          "visible": true,
+          "layer": 0,
+          "geometryType": "cube",
+          "materialType": "color",
+          "color": "#808080",
+          "isCollider": true,
+          "opacity": 0.99,
+          "textureSource": "",
+          "uvTilingX": 1,
+          "uvTilingY": 1,
+          "uvOffsetX": 0,
+          "uvOffsetY": 0,
+          "sequenceSource": "",
+          "sequenceJson": "",
+          "activeAnimation": "",
+          "playbackSpeed": 1,
+          "sequenceLoop": true,
+          "sequenceAutoplay": true,
+          "castShadows": true,
+          "receiveShadows": true
+        },
+        {
+          "id": "primitive_moryh9dj_4",
+          "name": "New primitive",
+          "type": "primitive",
+          "transform": {
+            "position": {
+              "x": 4.312,
+              "y": 0.96,
+              "z": -1.37
+            },
+            "rotation": {
+              "x": 2.72,
+              "y": -19.48,
+              "z": -12.56
+            },
+            "scale": {
+              "x": 1.541,
+              "y": 1.761,
+              "z": 1.502
+            }
+          },
+          "visible": true,
+          "layer": 0,
+          "geometryType": "cube",
+          "materialType": "color",
+          "color": "#808080",
+          "isCollider": true,
+          "opacity": 0.99,
+          "textureSource": "",
+          "uvTilingX": 1,
+          "uvTilingY": 1,
+          "uvOffsetX": 0,
+          "uvOffsetY": 0,
+          "sequenceSource": "",
+          "sequenceJson": "",
+          "activeAnimation": "",
+          "playbackSpeed": 1,
+          "sequenceLoop": true,
+          "sequenceAutoplay": true,
+          "castShadows": true,
+          "receiveShadows": true
+        },
+        {
+          "id": "primitive_moryhinx_5",
+          "name": "New primitive",
+          "type": "primitive",
+          "transform": {
+            "position": {
+              "x": 1.444,
+              "y": 0.96,
+              "z": -6.221
+            },
+            "rotation": {
+              "x": 2.72,
+              "y": -19.48,
+              "z": -12.56
+            },
+            "scale": {
+              "x": 1.541,
+              "y": 1.761,
+              "z": 1.502
+            }
+          },
+          "visible": true,
+          "layer": 0,
+          "geometryType": "cube",
+          "materialType": "color",
+          "color": "#808080",
+          "isCollider": true,
+          "opacity": 0.99,
+          "textureSource": "",
+          "uvTilingX": 1,
+          "uvTilingY": 1,
+          "uvOffsetX": 0,
+          "uvOffsetY": 0,
+          "sequenceSource": "",
+          "sequenceJson": "",
+          "activeAnimation": "",
+          "playbackSpeed": 1,
+          "sequenceLoop": true,
+          "sequenceAutoplay": true,
+          "castShadows": true,
+          "receiveShadows": true
+        },
+        {
+          "id": "primitive_moryhpem_6",
+          "name": "New primitive",
+          "type": "primitive",
+          "transform": {
+            "position": {
+              "x": 1.163,
+              "y": 2.311,
+              "z": -5.221
+            },
+            "rotation": {
+              "x": -63.67,
+              "y": 4.28,
+              "z": 20.66
+            },
+            "scale": {
+              "x": 1.541,
+              "y": 1.761,
+              "z": 1.502
+            }
+          },
+          "visible": true,
+          "layer": 0,
+          "geometryType": "cube",
+          "materialType": "color",
+          "color": "#808080",
+          "isCollider": true,
+          "opacity": 0.99,
+          "textureSource": "",
+          "uvTilingX": 1,
+          "uvTilingY": 1,
+          "uvOffsetX": 0,
+          "uvOffsetY": 0,
+          "sequenceSource": "",
+          "sequenceJson": "",
+          "activeAnimation": "",
+          "playbackSpeed": 1,
+          "sequenceLoop": true,
+          "sequenceAutoplay": true,
+          "castShadows": true,
+          "receiveShadows": true
+        },
+        {
+          "id": "primitive_moryhy4s_7",
+          "name": "New primitive",
+          "type": "primitive",
+          "transform": {
+            "position": {
+              "x": -0.045,
+              "y": 2.311,
+              "z": -6.246
+            },
+            "rotation": {
+              "x": -149.89,
+              "y": -20.42,
+              "z": 35.87
+            },
+            "scale": {
+              "x": 1.541,
+              "y": 1.761,
+              "z": 1.502
+            }
+          },
+          "visible": true,
+          "layer": 0,
+          "geometryType": "cube",
+          "materialType": "color",
+          "color": "#808080",
+          "isCollider": true,
+          "opacity": 0.99,
+          "textureSource": "",
+          "uvTilingX": 1,
+          "uvTilingY": 1,
+          "uvOffsetX": 0,
+          "uvOffsetY": 0,
+          "sequenceSource": "",
+          "sequenceJson": "",
+          "activeAnimation": "",
+          "playbackSpeed": 1,
+          "sequenceLoop": true,
+          "sequenceAutoplay": true,
+          "castShadows": true,
+          "receiveShadows": true
+        },
+        {
+          "id": "primitive_moryic93_8",
+          "name": "New primitive",
+          "type": "primitive",
+          "transform": {
+            "position": {
+              "x": -0.243,
+              "y": 1.214,
+              "z": -6.014
+            },
+            "rotation": {
+              "x": 179.11,
+              "y": 23.79,
+              "z": 1.09
+            },
+            "scale": {
+              "x": 1.541,
+              "y": 1.761,
+              "z": 1.502
+            }
+          },
+          "visible": true,
+          "layer": 0,
+          "geometryType": "cube",
+          "materialType": "color",
+          "color": "#808080",
+          "isCollider": true,
+          "opacity": 0.99,
+          "textureSource": "",
+          "uvTilingX": 1,
+          "uvTilingY": 1,
+          "uvOffsetX": 0,
+          "uvOffsetY": 0,
+          "sequenceSource": "",
+          "sequenceJson": "",
+          "activeAnimation": "",
+          "playbackSpeed": 1,
+          "sequenceLoop": true,
+          "sequenceAutoplay": true,
+          "castShadows": true,
+          "receiveShadows": true
+        },
+        {
+          "id": "light_mos0qmax_1",
+          "name": "New light",
+          "type": "light",
+          "transform": {
+            "position": {
+              "x": 2.331,
+              "y": 1.859,
+              "z": -0.73
+            },
+            "rotation": {
+              "x": -13.69,
+              "y": 21.2,
+              "z": 169.73
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            }
+          },
+          "visible": true,
+          "layer": 0,
+          "lightType": "spot",
+          "color": "#fb3c3c",
+          "intensity": 11.6,
+          "distance": 38.5,
+          "decay": 2,
+          "angle": 26,
+          "penumbra": 0,
+          "targetPosition": {
+            "x": 2.609,
+            "y": 0.521,
+            "z": -3.163
+          },
+          "castShadows": true,
+          "shadowResolution": 1024,
+          "shadowBias": 0,
+          "shadowNormalBias": 0.15,
+          "shadowRadius": 6.5,
+          "cookieTexture": "",
+          "flickerMode": "pattern",
+          "flickerSpeed": 10.6,
+          "flickerAmplitude": 0.18,
+          "flickerDecay": 8.67,
+          "flickerPattern": "[0,1,0,0,0,0,0,0,0,0,0,0,0,1,1,0,1,0,0,0,0,0,0,1]",
+          "rectWidth": 1,
+          "rectHeight": 1
+        },
+        {
+          "id": "light_mosl381i_1",
+          "name": "New light",
+          "type": "light",
+          "transform": {
+            "position": {
+              "x": -2.5,
+              "y": 1.965,
+              "z": -5
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            }
+          },
+          "visible": true,
+          "layer": 0,
+          "lightType": "point",
+          "color": "#ffffff",
+          "intensity": 20,
+          "distance": 100,
+          "decay": 2,
+          "angle": 45,
+          "penumbra": 0,
+          "targetPosition": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "castShadows": true,
+          "shadowResolution": 1024,
+          "shadowBias": 0,
+          "shadowNormalBias": 0.15,
+          "shadowRadius": 1,
+          "cookieTexture": "",
+          "flickerMode": "none",
+          "flickerSpeed": 1,
+          "flickerAmplitude": 0.1,
+          "flickerDecay": 0.5,
+          "flickerPattern": "[0,1,0,1]",
+          "rectWidth": 1,
+          "rectHeight": 1
+        },
+        {
+          "id": "sprite_mossawjh_3",
+          "name": "New sprite",
+          "type": "sprite",
+          "transform": {
+            "position": {
+              "x": -0.774,
+              "y": -0.347,
+              "z": -3.666
+            },
+            "rotation": {
+              "x": -33.44,
+              "y": -21.05,
+              "z": -13.35
+            },
+            "scale": {
+              "x": 1,
+              "y": 1.374,
+              "z": 1
+            }
+          },
+          "visible": true,
+          "layer": 0,
+          "textureSource": "textures/lamp_4.png",
+          "normalMap": "",
+          "depthMap": "",
+          "blendMode": "normal",
+          "castShadows": true,
+          "receiveShadows": true,
+          "billboardMode": "face_camera",
+          "isCollider": true
         }
       ],
       "spawnPoints": [
         {
           "id": "spawn_default",
           "position": {
-            "x": 0.188,
+            "x": -2.048,
             "y": 0.042,
             "z": -3.736
           }
@@ -574,7 +920,7 @@
         5.326692246287277,
         0,
         0,
-        0,
+        0.1389881073974613,
         3.4070348143361198
       ],
       "heightModifiers": [

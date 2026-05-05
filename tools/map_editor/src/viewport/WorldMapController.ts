@@ -89,8 +89,14 @@ export class WorldMapController {
   }
 
   public setTool(tool: string) {
+    const prev = this.currentTool;
     this.currentTool = tool;
     this.cancelDrawing();
+    // If the tool changed while the world-map view is visible, refresh room visuals
+    // so vertex handles (translate/round) appear immediately for the active room.
+    if (this.sceneGroup.visible && prev !== tool) {
+      this.rebuildRooms();
+    }
   }
 
   // ── Drawing Events ──

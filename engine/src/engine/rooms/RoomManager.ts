@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { World } from '../ecs/World';
 import { RoomData, EntitySpawnDef, CameraDef, HeightModifier } from './RoomData';
 import { TextureManager } from '../rendering/TextureManager';
-import { SpriteAnimation, AtlasAnimation, Transform, MeshRenderer, DoorMarker, CameraMarker } from '../ecs/Component';
+import { SpriteAnimation, AtlasAnimation, Transform, MeshRenderer, DoorMarker, CameraMarker, Sprite } from '../ecs/Component';
 import { NavGrid, CELL_SIZE } from '../nav/NavGrid';
 import { Entity } from '../ecs/Entity';
 import { CHARACTER_HEIGHT } from '../constants';
@@ -348,26 +348,36 @@ export class RoomManager {
         const sx = Math.abs(def.scale?.x ?? 1);
         const sy = Math.abs(def.scale?.y ?? 1);
         const sz = Math.abs(def.scale?.z ?? 1);
+        const isSpriteProp = def.entityType === 'sprite' || def.entityType === 'animated_sprite';
+
+        if (def.obstacleHalfWidth !== undefined || def.obstacleHalfDepth !== undefined || isSpriteProp) {
+            const halfW = def.obstacleHalfWidth ?? def.width / 2;
+            const halfD = def.obstacleHalfDepth ?? (isSpriteProp ? 0.1 : 0.8);
+            const useCameraYaw = isSpriteProp && (def.billboardMode ?? 'y_axis') !== 'fixed';
+            const rotY = useCameraYaw
+                ? Math.atan2(this.camera.position.x - def.position.x, this.camera.position.z - def.position.z)
+                : (def.rotation?.y ?? 0) * Math.PI / 180;
+            const sinY = Math.sin(rotY);
+            const cosY = Math.cos(rotY);
+            const corners = [
+                { x: -halfW, z: -halfD },
+                { x: halfW, z: -halfD },
+                { x: halfW, z: halfD },
+                { x: -halfW, z: halfD }
+            ].map(p => ({
+                x: p.x * cosY - p.z * sinY,
+                z: p.x * sinY + p.z * cosY
+            }));
+            return {
+                kind: 'polygon',
+                points: this.convexHull2D(corners)
+            };
+        }
 
         const rotX = (def.rotation?.x ?? 0) * Math.PI / 180;
         const rotY = (def.rotation?.y ?? 0) * Math.PI / 180;
         const rotZ = (def.rotation?.z ?? 0) * Math.PI / 180;
         const quat = new THREE.Quaternion().setFromEuler(new THREE.Euler(rotX, rotY, rotZ, 'XYZ'));
-
-        if (def.obstacleHalfWidth !== undefined || def.obstacleHalfDepth !== undefined) {
-            const halfW = def.obstacleHalfWidth ?? def.width / 2;
-            const halfD = def.obstacleHalfDepth ?? 0.8;
-            const corners = [
-                new THREE.Vector3(-halfW, 0, -halfD),
-                new THREE.Vector3(halfW, 0, -halfD),
-                new THREE.Vector3(halfW, 0, halfD),
-                new THREE.Vector3(-halfW, 0, halfD)
-            ];
-            return {
-                kind: 'polygon',
-                points: this.convexHull2D(this.projectToXZ(corners, quat))
-            };
-        }
 
         const width = def.width ?? 1;
         const height = def.height ?? 1;
@@ -520,36 +530,44 @@ export class RoomManager {
     }
 
     private createCollisionWireframe(def: EntitySpawnDef, floorY: number) {
+        if (def.entityType !== 'sprite' && def.entityType !== 'animated_sprite') {
+            return;
+        }
+
         const shape = this.computeObstacleShape(def);
-        let points: THREE.Vector3[];
+        const baseY = floorY + 0.01;
+        let points: THREE.Vector3[] = [];
 
         if (shape.kind === 'circle') {
             const segments = 32;
-            points = [];
             for (let i = 0; i <= segments; i++) {
                 const theta = (i / segments) * Math.PI * 2;
                 points.push(new THREE.Vector3(
-                    Math.cos(theta) * shape.radius,
-                    0.02,
-                    Math.sin(theta) * shape.radius
+                    def.position.x + Math.cos(theta) * shape.radius,
+                    baseY,
+                    def.position.z + Math.sin(theta) * shape.radius
                 ));
             }
         } else {
-            points = shape.points.map(p => new THREE.Vector3(p.x, 0.02, p.z));
+            points = shape.points.map(p => new THREE.Vector3(def.position.x + p.x, baseY, def.position.z + p.z));
             if (points.length > 0) {
                 points.push(points[0].clone());
             }
         }
 
-        const geo = new THREE.BufferGeometry().setFromPoints(points);
-        const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0xff0000 }));
-        line.position.set(def.position.x, floorY, def.position.z);
-        line.renderOrder = 1000;
+        const geometry = new THREE.BufferGeometry().setFromPoints(points);
+        const material = new THREE.LineBasicMaterial({ color: 0xff00ff, linewidth: 2, transparent: true, opacity: 0.85 });
+        const line = new THREE.LineLoop(geometry, material);
         this.scene.add(line);
 
-        const debugEntity = this.world.createEntity();
-        this.world.addComponent(debugEntity, 'RoomMember', { roomId: this.currentRoomId! });
-        this.world.addComponent(debugEntity, 'MeshRenderer', { mesh: line });
+        const entity = this.world.createEntity();
+        this.world.addComponent(entity, 'RoomMember', { roomId: this.currentRoomId! });
+        this.world.addComponent(entity, 'Transform', {
+            position: new THREE.Vector3(0, 0, 0),
+            rotation: new THREE.Euler(0, 0, 0),
+            scale: new THREE.Vector3(1, 1, 1)
+        });
+        this.world.addComponent(entity, 'MeshRenderer', { mesh: line });
     }
 
     private createBoundaryEntity(mesh: THREE.Mesh, isFloor: boolean) {
@@ -636,7 +654,11 @@ export class RoomManager {
         const sy = def.scale?.y ?? 1;
         const sz = def.scale?.z ?? 1;
         mesh.scale.set(sx, sy, sz);
-        mesh.position.set(def.position.x, def.position.y || floorY + sy / 2, def.position.z);
+        mesh.position.set(
+            def.position.x,
+            def.position.y !== undefined ? def.position.y : floorY + sy / 2,
+            def.position.z
+        );
 
         // Shadow
         mesh.castShadow = def.castShadow ?? false;
@@ -680,7 +702,11 @@ export class RoomManager {
         const distance = def.lightDistance ?? 10;
         const decay = def.lightDecay ?? 2;
 
-        const position = new THREE.Vector3(def.position.x, def.position.y + baseY, def.position.z);
+        const position = new THREE.Vector3(
+            def.position.x,
+            def.position.y !== undefined ? def.position.y : baseY,
+            def.position.z
+        );
         const rotation = new THREE.Euler(
             (def.rotation?.x ?? 0) * Math.PI / 180,
             (def.rotation?.y ?? 0) * Math.PI / 180,
@@ -700,16 +726,24 @@ export class RoomManager {
         lightRig.position.copy(position);
         lightRig.rotation.copy(rotation);
 
+        // Apply entity scale so editor and runtime visuals match. When a
+        // parent group is scaled, child local positions (like the light
+        // target) must be stored in the parent's local space. We'll apply
+        // the scale after computing the local target positions (below).
+
         let light: THREE.Light;
         switch (def.lightType) {
             case 'directional': {
                 const dl = new THREE.DirectionalLight(color, intensity);
                 dl.position.set(0, 0, 0);
-                dl.target.position.set(
-                    worldTarget.x - position.x,
-                    worldTarget.y - position.y,
-                    worldTarget.z - position.z
-                );
+                // Compute local target position relative to the lightRig origin.
+                // The editor stores a world-space target; convert that into the
+                // lightRig's local space by subtracting the rig origin and
+                // applying the inverse of the rig rotation so the target
+                // respects the entity's rotation in-game.
+                const invQdl = lightRig.quaternion.clone().invert();
+                const localDirDL = worldTarget.clone().sub(position).applyQuaternion(invQdl);
+                dl.target.position.copy(localDirDL);
                 lightRig.add(dl);
                 lightRig.add(dl.target);
                 light = dl;
@@ -721,11 +755,12 @@ export class RoomManager {
                 sl.penumbra = def.lightPenumbra ?? 0;
                 sl.decay = decay;
                 sl.position.set(0, 0, 0);
-                sl.target.position.set(
-                    worldTarget.x - position.x,
-                    worldTarget.y - position.y,
-                    worldTarget.z - position.z
-                );
+                // Compute local target position relative to the lightRig origin.
+                // Convert editor world-space target into lightRig local space
+                // so the spot direction rotates with the entity transform.
+                const invQ = lightRig.quaternion.clone().invert();
+                const localDir = worldTarget.clone().sub(position).applyQuaternion(invQ);
+                sl.target.position.copy(localDir);
                 lightRig.add(sl);
                 lightRig.add(sl.target);
                 light = sl;
@@ -805,7 +840,47 @@ export class RoomManager {
         }
 
         this.scene.add(lightRig);
+
+        // Mark the whole rig as room-local so unloadCurrentRoom can find and
+        // remove it in a single traversal (avoids leaving orphaned helper
+        // objects when only the inner light child was previously flagged).
+        (lightRig as any).isRoomLight = true;
+
+        // Now apply the entity scale (if any). We must scale the rig after
+        // setting the children's local positions so that world-space target
+        // positions are preserved only if the local target was computed in
+        // local coordinates. Since the editor stores targetPosition as
+        // world-space, we compute local target above; applying scale here
+        // will make the visual cone width and arrows match the editor.
+        if (def.scale) {
+            lightRig.scale.set(def.scale.x, def.scale.y, def.scale.z);
+            const sx = def.scale.x || 1, sy = def.scale.y || 1, sz = def.scale.z || 1;
+            lightRig.traverse((c) => {
+                // Adjust target objects attached to the light so their final
+                // world positions match the intended worldTarget.
+                if (c && (c as any).isLight && (c as any).target) {
+                    const targ = (c as any).target as THREE.Object3D;
+                    targ.position.set(
+                        targ.position.x / sx,
+                        targ.position.y / sy,
+                        targ.position.z / sz
+                    );
+                }
+            });
+        }
         lightRig.updateMatrixWorld(true);
+
+        // Register the rig with the ECS so it is tracked as a RoomMember and
+        // removed during unloadCurrentRoom. We attach a MeshRenderer pointing
+        // at the group so the existing teardown code removes it cleanly.
+        const lightEntity = this.world.createEntity();
+        this.world.addComponent(lightEntity, 'RoomMember', { roomId: this.currentRoomId! });
+        this.world.addComponent(lightEntity, 'Transform', {
+            position: lightRig.position.clone(),
+            rotation: lightRig.rotation.clone(),
+            scale: lightRig.scale.clone()
+        });
+        this.world.addComponent(lightEntity, 'MeshRenderer', { mesh: lightRig as unknown as THREE.Object3D });
     }
 
     private spawnSpriteEntity(def: EntitySpawnDef, floorY: number, isPlayer: boolean, playerSpeed: number = 3.0) {
@@ -853,19 +928,16 @@ export class RoomManager {
         // ── Feet-first positioning ────────────────────────────────
         const feetX = def.position.x;
         const feetZ = def.position.z;
-        mesh.position.set(feetX, floorY, feetZ);
+        const feetY = isPlayer ? floorY : def.position.y;
+        mesh.position.set(feetX, feetY, feetZ);
         mesh.castShadow = def.castShadow ?? false;
         mesh.receiveShadow = def.receiveShadow ?? false;
         this.scene.add(mesh);
 
-        if (def.isObstacle && def.position.y <= CHARACTER_HEIGHT) {
-            this.createCollisionWireframe(def, floorY);
-        }
-
         const entity = this.world.createEntity();
         this.world.addComponent(entity, 'RoomMember', { roomId: this.currentRoomId! });
         this.world.addComponent(entity, 'Transform', {
-            position: new THREE.Vector3(feetX, floorY, feetZ),
+            position: new THREE.Vector3(feetX, feetY, feetZ),
             rotation: mesh.rotation.clone(),
             scale: new THREE.Vector3(1, 1, 1)
         });
@@ -890,7 +962,11 @@ export class RoomManager {
             frame: 0,
             baseWidth: spriteW,
             baseHeight: spriteH,
-            discreteScaleOffset: 0
+            discreteScaleOffset: 0,
+            billboardMode: (def.billboardMode as Sprite['billboardMode']) ?? 'y_axis',
+            // Player atlas frames (customer.png) have ~30 % empty padding below the feet.
+            // feetAnchor shifts the quad up so the character's visual feet sit at floorY.
+            feetAnchor: isPlayer ? 0.3 : (def.feetAnchor ?? 0),
         });
 
         // Obstacle tag
@@ -962,19 +1038,16 @@ export class RoomManager {
 
         const feetX = def.position.x;
         const feetZ = def.position.z;
-        mesh.position.set(feetX, floorY, feetZ);
+        const feetY = isPlayer ? floorY : def.position.y;
+        mesh.position.set(feetX, feetY, feetZ);
         mesh.castShadow = def.castShadow ?? false;
         mesh.receiveShadow = def.receiveShadow ?? false;
         this.scene.add(mesh);
 
-        if (def.isObstacle && def.position.y <= CHARACTER_HEIGHT) {
-            this.createCollisionWireframe(def, floorY);
-        }
-
         const entity = this.world.createEntity();
         this.world.addComponent(entity, 'RoomMember',  { roomId: this.currentRoomId! });
         this.world.addComponent(entity, 'Transform', {
-            position: new THREE.Vector3(feetX, floorY, feetZ),
+            position: new THREE.Vector3(feetX, feetY, feetZ),
             rotation: mesh.rotation.clone(),
             scale:    new THREE.Vector3(1, 1, 1)
         });
@@ -992,7 +1065,11 @@ export class RoomManager {
             frame: 0,
             baseWidth:  spriteW,
             baseHeight: spriteH,
-            discreteScaleOffset: 0
+            discreteScaleOffset: 0,
+            billboardMode: (def.billboardMode as Sprite['billboardMode']) ?? 'y_axis',
+            // Player atlas frames (customer.png) have ~30 % empty padding below the feet.
+            // feetAnchor shifts the quad up so the character's visual feet sit at floorY.
+            feetAnchor: isPlayer ? 0.3 : (def.feetAnchor ?? 0),
         });
 
         if (def.atlasFrames && def.imageWidth && def.imageHeight) {
@@ -1134,7 +1211,11 @@ export class RoomManager {
         const sy = def.scale?.y ?? 2.5;
         const sz = def.scale?.z ?? 0.35;
         mesh.scale.set(sx, sy, sz);
-        mesh.position.set(def.position.x, (def.position.y || floorY) + sy / 2, def.position.z);
+        mesh.position.set(
+            def.position.x,
+            def.position.y !== undefined ? def.position.y + sy / 2 : floorY + sy / 2,
+            def.position.z
+        );
 
         if (def.rotation) {
             mesh.rotation.set(

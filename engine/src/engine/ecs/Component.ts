@@ -19,6 +19,22 @@ export interface Sprite {
     baseWidth: number;
     baseHeight: number;
     discreteScaleOffset: number;
+    /** Controls how the sprite plane is oriented toward the camera each frame.
+     *  'y_axis'     — cylindrical Y-up billboard (default; sprite stays vertical).
+     *  'face_camera' — full spherical billboard (sprite plane normal = camera direction).
+     *  'fixed'      — no automatic rotation (mesh keeps its placed rotation).
+     */
+    billboardMode?: 'y_axis' | 'face_camera' | 'fixed';
+    /**
+     * Fraction (0–1) from the BOTTOM of the sprite frame where the character's feet are.
+     * 0 = feet at the very bottom of the quad (default, suits textures with feet touching
+     *     the lower edge).
+     * 0.3 = feet 30 % from the bottom (useful when the atlas has empty padding at the bottom).
+     *
+     * SpriteSystem uses this to shift the quad so the indicated row sits at
+     * transform.position.y (the floor/feet position).
+     */
+    feetAnchor?: number;
 }
 
 export interface MeshRenderer {

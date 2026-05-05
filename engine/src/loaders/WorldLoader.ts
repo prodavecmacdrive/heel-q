@@ -163,6 +163,14 @@ export class WorldLoader {
             isObstacle: false
         };
 
+        if (e.type === 'sprite' || e.type === 'animated_sprite') {
+            // The editor renders sprite entities on a 2×2 plane and uses transform.scale
+            // directly as the visual size multiplier. The engine's sprite renderer uses a
+            // 1×1 plane and therefore must double the width/height conversion to match.
+            result.width = (e.transform.scale.x ?? 1) * 2;
+            result.height = (e.transform.scale.y ?? 1) * 2;
+        }
+
         if (e.type === 'primitive') {
             result.geometryType = e.geometryType || 'cube';
             result.color = e.color || '#808080';
@@ -247,6 +255,8 @@ export class WorldLoader {
             result.sheetRows = e.rows ?? 1;
             result.castShadow = e.castShadows ?? false;
             result.receiveShadow = e.receiveShadows ?? false;
+            result.isObstacle = e.isCollider ?? false;
+            result.billboardMode = e.billboardMode || 'y_axis';
         } else if (e.type === 'sound') {
             result.audioSource = e.audioSource || e.src || '';
             result.volume = e.volume ?? 1;
@@ -263,9 +273,12 @@ export class WorldLoader {
             result.targetEntityIds = e.targetEntityIds ?? [];
             result.payload = e.payload || '';
         } else {
+            // type === 'sprite' (or unknown — fall back to sprite handling)
             result.spriteKey = e.textureSource || e.spriteKey || '';
             result.castShadow = e.castShadows ?? false;
             result.receiveShadow = e.receiveShadows ?? false;
+            result.isObstacle = e.isCollider ?? false;
+            result.billboardMode = e.billboardMode || 'y_axis';
         }
 
         return result;

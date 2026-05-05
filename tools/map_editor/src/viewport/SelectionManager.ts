@@ -164,14 +164,63 @@ export class SelectionManager {
 
     const intersects = this.raycaster.intersectObjects(selectables, true);
     if (intersects.length > 0) {
-      // Walk up to find the entity root (the one with userData.entityId)
-      let hit = intersects[0].object;
-      while (hit && !hit.userData?.entityId && hit.parent) {
-        hit = hit.parent;
-      }
-      if (hit?.userData?.entityId) {
-        this.select(hit);
-        return;
+      // Prefer hits on outline primitives (edges/wires) and light-target handles.
+      for (const entry of intersects) {
+        const obj = entry.object as THREE.Object3D & { userData: any };
+        if (!obj) continue;
+
+        // skip selection helper geometry
+        if (obj.userData?.__selectionHighlight) continue;
+
+        // If the hit is an outline element, attach selection to that outline
+        // but ensure the outline has an entityId pointing to its root entity.
+        if (obj.userData?.__outlineSelectable) {
+          // find parent entity id
+          let p: THREE.Object3D | null = obj;
+          while (p && !p.userData?.entityId) p = p.parent;
+          if (p && p.userData?.entityId) {
+            obj.userData.entityId = p.userData.entityId;
+          }
+          this.select(obj);
+          return;
+        }
+
+        // Light target spheres (and similar handles) should be selectable even
+        // when part of a composite. They usually carry isLightTarget and an
+        // entityId already.
+        if (obj.userData?.isLightTarget) {
+          // ensure entityId exists by walking to parent if necessary
+          if (!obj.userData.entityId) {
+            let p: THREE.Object3D | null = obj;
+            while (p && !p.userData?.entityId) p = p.parent;
+            if (p && p.userData?.entityId) obj.userData.entityId = p.userData.entityId;
+          }
+          this.select(obj);
+          return;
+        }
+
+        // If this intersect is a regular entity object, only accept it if it
+        // is not part of an archetype root (composite). For archetype roots
+        // we require clicking the outline instead of the body.
+        if (obj.userData?.entityId) {
+          // Detect if any ancestor is an archetype root
+          let a: THREE.Object3D | null = obj;
+          let insideArchetypeRoot = false;
+          while (a) {
+            if (a.userData?.__isArchetypeRoot) { insideArchetypeRoot = true; break; }
+            a = a.parent;
+          }
+          if (!insideArchetypeRoot) {
+            // plain entity — select it
+            // walk up to actual entity root (in case a child mesh was hit)
+            let hit = obj;
+            while (hit && !hit.userData?.entityId && hit.parent) hit = hit.parent;
+            if (hit?.userData?.entityId) {
+              this.select(hit);
+              return;
+            }
+          }
+        }
       }
     }
 

@@ -151,7 +151,9 @@ export class EditorApp {
 
     this.viewport.onRender(() => {
       if (this.focusedObject && !this.gizmoDragging) {
-        this.viewport.controls.target.lerp(this.focusedObject.position, 0.1);
+        const target = new THREE.Vector3();
+        this.focusedObject.getWorldPosition(target);
+        this.viewport.controls.target.lerp(target, 0.1);
       }
     });
 
@@ -516,6 +518,9 @@ export class EditorApp {
     if (!this.activeRoom) return;
 
     for (const entity of this.activeRoom.entities) {
+      if (!entity.transform) {
+        entity.transform = { position: { x: 0, y: 0, z: 0 }, rotation: { x: 0, y: 0, z: 0 }, scale: { x: 1, y: 1, z: 1 } };
+      }
       this.entityMap.set(entity.id, entity);
       const obj = this.factory.create(entity);
       // Offset mesh Y by terrain height at the entity's XZ position
@@ -534,6 +539,9 @@ export class EditorApp {
     for (const entity of this.activeRoom.entities) {
       const mesh = this.meshMap.get(entity.id);
       if (!mesh) continue;
+      if (!entity.transform) {
+        entity.transform = { position: { x: 0, y: 0, z: 0 }, rotation: { x: 0, y: 0, z: 0 }, scale: { x: 1, y: 1, z: 1 } };
+      }
       const t = entity.transform;
       const terrainY = this.heightMapCtrl.getHeightAt(t.position.x, t.position.z);
       mesh.position.y = t.position.y + terrainY;
@@ -1279,6 +1287,9 @@ export class EditorApp {
     if (s) {
       this.focusedObject = s;
       this.selection.isLocked = true;
+      const worldPos = new THREE.Vector3();
+      s.getWorldPosition(worldPos);
+      this.viewport.controls.target.copy(worldPos);
       this.toast('Selection locked & Camera focused (Escape to release)', 'info');
     } else {
       this.focusedObject = null;

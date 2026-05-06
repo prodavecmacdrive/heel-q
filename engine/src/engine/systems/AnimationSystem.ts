@@ -73,20 +73,23 @@ export class AnimationSystem extends System {
 
             anim.timeAccumulator += dt;
             const frameDuration = 1 / anim.frameRate;
+            let frameChanged = false;
             if (anim.timeAccumulator >= frameDuration) {
                 anim.timeAccumulator -= frameDuration;
                 anim.currentFrame++;
                 if (anim.currentFrame >= anim.frames.length) {
                     anim.currentFrame = anim.loop ? 0 : anim.frames.length - 1;
                 }
+                frameChanged = true;
             }
 
+            // Only update texture properties if the frame actually advanced (or if it's potentially uninitialized)
             const frame = anim.frames[anim.currentFrame];
             if (!frame) continue;
 
             const mesh = mr.mesh as THREE.Mesh;
             const mat  = mesh.material as THREE.MeshBasicMaterial;
-            if (mat.map) {
+            if (mat.map && (frameChanged || anim.timeAccumulator === dt)) {
                 // Ensure the map is using high-res coordinates
                 mat.map.matrixAutoUpdate = false;
                 mat.map.repeat.set(frame.w / anim.imageWidth, frame.h / anim.imageHeight);
@@ -95,8 +98,7 @@ export class AnimationSystem extends System {
                     1 - (frame.y + frame.h) / anim.imageHeight
                 );
                 mat.map.updateMatrix();
-                mat.map.needsUpdate = true;
-                mat.needsUpdate = true;
+                // Removed mat.needsUpdate = true which caused massive shader recompilation stalls
             }
         }
     }

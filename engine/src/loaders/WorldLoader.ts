@@ -3,7 +3,7 @@
    ═══════════════════════════════════════════════════════════════════════ */
 
 import type { WorldProject, ArchetypeSchema } from '@heel-quest/shared-core';
-import { composeTransforms, getNestedArchetypeInstances, resolveArchetypeInstance } from '@heel-quest/shared-core';
+import { composePoint, composeTransforms, getNestedArchetypeInstances, resolveArchetypeInstance } from '@heel-quest/shared-core';
 import type { RoomData, EntitySpawnDef, CameraDef } from '../engine/rooms/RoomData';
 import type { TextureManager } from '../engine/rendering/TextureManager';
 import { normalizeAssetPath } from '@heel-quest/shared-core';
@@ -22,13 +22,10 @@ export class WorldLoader {
      * preloading all textures and atlas JSONs along the way.
      */
     static async load(worldData: WorldProject, tm: TextureManager): Promise<WorldLoadResult> {
-        console.log(`Loaded World Project: ${worldData.projectId} with ${worldData.rooms.length} rooms`);
-
         // Load archetype schema for resolving archetype_instance entities
         const archetypeSchema = await WorldLoader.loadArchetypeSchema();
 
-        const mappedRooms = worldData.rooms.map(r => {
-            // Pre-resolve archetype_instance entities for camera/spawn extraction
+        const mappedRooms = worldData.rooms.map((r, roomIndex) => {
             const resolvedEntities = r.entities.flatMap((e: any) => WorldLoader.expandCompositeEntity(e, archetypeSchema));
 
             const legacyCam = WorldLoader.extractLegacyCamera(resolvedEntities);
@@ -40,8 +37,7 @@ export class WorldLoader {
                 walkPadding: 0.5,
                 spawnPoints: r.spawnPoints,
                 outline: WorldLoader.expandOutline(r.outline, r.cornerRadii),
-                entities: r.entities
-                    .flatMap((e): any[] => WorldLoader.expandCompositeEntity(e, archetypeSchema))
+                entities: resolvedEntities
                     .filter((e): e is typeof e =>
                         e.type === 'sprite' || e.type === 'animated_sprite' ||
                         e.type === 'primitive' || e.type === 'texture' || e.type === 'light' ||
@@ -83,7 +79,6 @@ export class WorldLoader {
         // Determine initial room
         const spawnRoom = worldData.rooms.find(r => Array.isArray(r.spawnPoints) && r.spawnPoints.length > 0);
         const initialRoomId = spawnRoom?.id || worldData.rooms[0]?.id || null;
-
         return { rooms: mappedRooms, initialRoomId, sheetMeta };
     }
 
@@ -130,14 +125,24 @@ export class WorldLoader {
         nextAncestry.add(e.archetypeId);
 
         const nestedEntities = getNestedArchetypeInstances(e, archetypeSchema)
-            .flatMap((child) => WorldLoader.expandCompositeEntity({
-                ...child,
-                transform: composeTransforms(e.transform, child.transform),
-                visible: e.visible && child.visible,
-                layer: child.layer ?? e.layer,
-            }, archetypeSchema, nextAncestry));
+            .flatMap((child) => {
+                const worldTarget = child.targetPosition
+                    ? composePoint(e.transform, child.targetPosition)
+                    : undefined;
+                return WorldLoader.expandCompositeEntity({
+                    ...child,
+                    transform: composeTransforms(e.transform, child.transform),
+                    targetPosition: worldTarget,
+                    visible: e.visible && child.visible,
+                    layer: child.layer ?? e.layer,
+                }, archetypeSchema, nextAncestry);
+            });
 
-        return [rootEntity, ...nestedEntities];
+        const expanded = [rootEntity, ...nestedEntities];
+        if (ancestry.size === 0 && expanded.length > 1) {
+            console.debug(`[WorldLoader] expanded archetype ${e.archetypeId} (${e.id}) -> ${expanded.length} entities`);
+        }
+        return expanded;
     }
 
     private static mapEntity(e: any, archetypeSchema?: ArchetypeSchema): EntitySpawnDef | null {
@@ -450,8 +455,9 @@ export class WorldLoader {
                     }
                 }
 
-                // Try loading sheet metadata for sprite keys
-                if (e.spriteKey && !sheetMeta.has(e.spriteKey)) {
+                // Try loading sheet metadata for sprite-type entities only
+                if (e.spriteKey && !sheetMeta.has(e.spriteKey) &&
+                    (e.entityType === 'sprite' || e.entityType === 'animated_sprite')) {
                     preloads.push(
                         WorldLoader.loadSheetMeta(e.spriteKey, sheetMeta)
                     );
@@ -493,7 +499,6 @@ export class WorldLoader {
             const resp = await fetch(jsonUrl);
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             const atlas = await resp.json();
-            console.log(`Successfully parsed player atlas JSON: ${jsonPath}`);
             room.characterSequenceFrames = atlas.frames.map((f: any) => ({
                 ...(f.frame as { x: number; y: number; w: number; h: number }),
                 filename: f.filename as string
@@ -527,7 +532,6 @@ export class WorldLoader {
             const resp = await fetch(jsonUrl);
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             const atlas = await resp.json();
-            console.log(`Successfully parsed atlas JSON: ${jsonPath}`);
             e.atlasFrames = atlas.frames.map((f: any) => ({
                 ...(f.frame as { x: number; y: number; w: number; h: number }),
                 filename: f.filename as string

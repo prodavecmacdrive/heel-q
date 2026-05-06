@@ -72,12 +72,19 @@ export class World {
     }
 
     update(dt: number) {
-        // Run all systems
+        const frameStart = performance.now();
+
         for (const system of this.systems) {
+            const sysStart = performance.now();
             system.update(dt);
+            const sysEnd = performance.now();
+            const sysDuration = sysEnd - sysStart;
+            if (sysDuration > 50) {
+                console.warn(`[World] Slow system ${system.constructor.name}: ${sysDuration.toFixed(1)}ms`);
+            }
         }
 
-        // Cleanup destroyed entities
+        const cleanupStart = performance.now();
         if (this.entitiesToDestroy.size > 0) {
             for (const entity of this.entitiesToDestroy) {
                 for (const map of this.components.values()) {
@@ -86,6 +93,17 @@ export class World {
                 this.entities.delete(entity);
             }
             this.entitiesToDestroy.clear();
+        }
+        const cleanupEnd = performance.now();
+        const cleanupDuration = cleanupEnd - cleanupStart;
+        if (cleanupDuration > 10) {
+            console.warn(`[World] cleanup took ${cleanupDuration.toFixed(1)}ms`);
+        }
+
+        const frameEnd = performance.now();
+        const frameDuration = frameEnd - frameStart;
+        if (frameDuration > 100) {
+            console.warn(`[World] update frame took ${frameDuration.toFixed(1)}ms`);
         }
     }
 }

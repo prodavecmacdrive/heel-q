@@ -511,6 +511,62 @@ export function composeTransforms(
   };
 }
 
+export function composePoint(
+  parent: BaseEntity['transform'],
+  localPoint: Vec3,
+): Vec3 {
+  const toRadians = (degrees: number) => degrees * Math.PI / 180;
+  const rotatePoint = (point: Vec3, rotation: Vec3): Vec3 => {
+    let x = point.x;
+    let y = point.y;
+    let z = point.z;
+
+    const rx = toRadians(rotation.x);
+    const ry = toRadians(rotation.y);
+    const rz = toRadians(rotation.z);
+
+    // X-axis rotation
+    let cosX = Math.cos(rx);
+    let sinX = Math.sin(rx);
+    let y1 = y * cosX - z * sinX;
+    let z1 = y * sinX + z * cosX;
+    y = y1;
+    z = z1;
+
+    // Y-axis rotation
+    let cosY = Math.cos(ry);
+    let sinY = Math.sin(ry);
+    let x1 = x * cosY + z * sinY;
+    let z2 = -x * sinY + z * cosY;
+    x = x1;
+    z = z2;
+
+    // Z-axis rotation
+    let cosZ = Math.cos(rz);
+    let sinZ = Math.sin(rz);
+    let x2 = x * cosZ - y * sinZ;
+    let y2 = x * sinZ + y * cosZ;
+    x = x2;
+    y = y2;
+
+    return { x, y, z };
+  };
+
+  const scaledPoint = {
+    x: localPoint.x * parent.scale.x,
+    y: localPoint.y * parent.scale.y,
+    z: localPoint.z * parent.scale.z,
+  };
+
+  const rotatedPoint = rotatePoint(scaledPoint, parent.rotation);
+
+  return {
+    x: parent.position.x + rotatedPoint.x,
+    y: parent.position.y + rotatedPoint.y,
+    z: parent.position.z + rotatedPoint.z,
+  };
+}
+
 export function getNestedArchetypeInstances(
   entity: ArchetypeInstanceEntity,
   schema: ArchetypeSchema,

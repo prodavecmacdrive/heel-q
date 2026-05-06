@@ -56,9 +56,39 @@ export class SceneSerializer {
         }
       }
     }
+
+    for (const room of data.rooms) {
+      if (!room.entities) continue;
+      room.entities = room.entities.map((entity: any) => SceneSerializer.ensureTransform(entity));
+    }
+
     data.version = SCHEMA_VERSION;
 
     return data;
+  }
+
+  /** Ensure an entity has a valid transform object for editor usage */
+  static ensureTransform(entity: any): any {
+    if (!entity.transform || typeof entity.transform !== 'object') {
+      entity.transform = { position: { x: 0, y: 0, z: 0 }, rotation: { x: 0, y: 0, z: 0 }, scale: { x: 1, y: 1, z: 1 } };
+      return entity;
+    }
+
+    entity.transform.position = entity.transform.position || { x: 0, y: 0, z: 0 };
+    entity.transform.rotation = entity.transform.rotation || { x: 0, y: 0, z: 0 };
+    entity.transform.scale = entity.transform.scale || { x: 1, y: 1, z: 1 };
+
+    entity.transform.position.x = entity.transform.position.x ?? 0;
+    entity.transform.position.y = entity.transform.position.y ?? 0;
+    entity.transform.position.z = entity.transform.position.z ?? 0;
+    entity.transform.rotation.x = entity.transform.rotation.x ?? 0;
+    entity.transform.rotation.y = entity.transform.rotation.y ?? 0;
+    entity.transform.rotation.z = entity.transform.rotation.z ?? 0;
+    entity.transform.scale.x = entity.transform.scale.x ?? 1;
+    entity.transform.scale.y = entity.transform.scale.y ?? 1;
+    entity.transform.scale.z = entity.transform.scale.z ?? 1;
+
+    return entity;
   }
 
   /** Migrate a legacy entity to ArchetypeInstanceEntity format */

@@ -19,6 +19,7 @@ export class RoomManager {
     private camera: THREE.PerspectiveCamera;
     private roomAudioElements: HTMLAudioElement[] = [];
     private sheetMeta: Map<string, SpriteSheetMeta> = new Map();
+    private materialCache: Map<string, THREE.Material> = new Map();
     /** Height modifiers of the currently-loaded room (empty = flat terrain) */
     private currentHeightModifiers: HeightModifier[] = [];
 
@@ -45,6 +46,14 @@ export class RoomManager {
      */
     public getFloorY(wx: number, wz: number): number {
         return computeTerrainHeight(this.currentHeightModifiers, wx, wz);
+    }
+
+    private getMaterial(key: string, factory: () => THREE.Material): THREE.Material {
+        const existing = this.materialCache.get(key);
+        if (existing) return existing;
+        const material = factory();
+        this.materialCache.set(key, material);
+        return material;
     }
 
     async loadRoom(roomData: RoomData) {
@@ -136,11 +145,12 @@ export class RoomManager {
                 floorTex.wrapT = THREE.RepeatWrapping;
                 floorTex.repeat.set(0.5, 0.5);
             }
-            const floorMat = new THREE.MeshStandardMaterial({
+            const floorMat = this.getMaterial(`boundary|floor|${floorTex?.uuid ?? 'none'}`, () => new THREE.MeshStandardMaterial({
                 map: floorTex || undefined,
                 color: floorTex ? 0xffffff : 0x1a2030,
                 side: THREE.DoubleSide, roughness: 0.9, metalness: 0.0
-            });
+            })) as THREE.MeshStandardMaterial;
+            if (floorTex) floorMat.map = floorTex;
             const floorGeo = new THREE.PlaneGeometry(fw, fd, FLOOR_SEGS, FLOOR_SEGS);
             floorGeo.rotateX(-Math.PI / 2);
             floorGeo.translate(fcx, 0, fcz);
@@ -166,11 +176,12 @@ export class RoomManager {
                 wallTex.wrapS = THREE.RepeatWrapping;
                 wallTex.wrapT = THREE.RepeatWrapping;
             }
-            const wallMat = new THREE.MeshStandardMaterial({
+            const wallMat = this.getMaterial('boundary|wall', () => new THREE.MeshStandardMaterial({
                 map: wallTex || undefined,
                 color: wallTex ? 0xffffff : 0x223344,
                 side: THREE.DoubleSide, roughness: 0.9, metalness: 0.0
-            });
+            })) as THREE.MeshStandardMaterial;
+            if (wallTex) wallMat.map = wallTex;
             const N = outline.length;
             const wPos = new Float32Array(N * 2 * 3);
             const wUVs = new Float32Array(N * 2 * 2);
@@ -208,7 +219,8 @@ export class RoomManager {
             const fallbackPos = boundaries.floor.position ?? { x: 0, y: 0, z: 0 };
             const floorTexRect = this.textureManager.getTexture(boundaries.floor.texture);
             if (floorTexRect) {
-                const floorMat = new THREE.MeshStandardMaterial({ map: floorTexRect, roughness: 0.9, metalness: 0.0 });
+                const floorMat = this.getMaterial('boundary|floor_rect', () => new THREE.MeshStandardMaterial({ map: floorTexRect, roughness: 0.9, metalness: 0.0 })) as THREE.MeshStandardMaterial;
+            floorMat.map = floorTexRect;
                 const floorGeo = new THREE.PlaneGeometry(boundaries.floor.width, boundaries.floor.depth);
                 const floorMesh = new THREE.Mesh(floorGeo, floorMat);
                 floorMesh.rotation.x = -Math.PI / 2;
@@ -220,7 +232,8 @@ export class RoomManager {
             for (const wallDef of boundaries.walls) {
                 const wTex = this.textureManager.getTexture(wallDef.texture);
                 if (wTex) {
-                    const wallMat = new THREE.MeshStandardMaterial({ map: wTex, roughness: 0.9, metalness: 0.0 });
+                    const wallMat = this.getMaterial(`boundary|wall_rect|${wTex?.uuid || 'none'}`, () => new THREE.MeshStandardMaterial({ map: wTex, roughness: 0.9, metalness: 0.0 })) as THREE.MeshStandardMaterial;
+                    if (wTex) wallMat.map = wTex;
                     const wallGeo = new THREE.PlaneGeometry(wallDef.width, wallDef.height);
                     const wallMesh = new THREE.Mesh(wallGeo, wallMat);
                     wallMesh.position.set(wallDef.position.x, wallDef.position.y, wallDef.position.z);
@@ -602,19 +615,22 @@ export class RoomManager {
         }
 
         const hasTexture = !!def.textureSource || !!def.sequenceSource;
-        const color = hasTexture ? new THREE.Color(0xffffff) : new THREE.Color(def.color || '#808080');
-        const mat = new THREE.MeshStandardMaterial({
-            color,
-            transparent: hasTexture || (def.opacity ?? 1) < 1,
-            opacity: def.opacity ?? 1,
-            roughness: 0.6,
-            metalness: 0.1,
-            side: THREE.DoubleSide,
-            shadowSide: THREE.FrontSide,
-            alphaTest: hasTexture ? 0.1 : 0,
-        });
-
         const texturePathValue = def.sequenceSource || def.textureSource;
+        const materialKey = `primitive|${def.geometryType || 'cube'}|${hasTexture ? texturePathValue : def.color || '#808080'}|opacity:${def.opacity ?? 1}|atlas:${!!def.atlasFrames}|tiling:${def.uvTilingX ?? 1},${def.uvTilingY ?? 1}|offset:${def.uvOffsetX ?? 0},${def.uvOffsetY ?? 0}`;
+        const mat = this.getMaterial(materialKey, () => {
+            const material = new THREE.MeshStandardMaterial({
+                color: hasTexture ? new THREE.Color(0xffffff) : new THREE.Color(def.color || '#808080'),
+                transparent: hasTexture || (def.opacity ?? 1) < 1,
+                opacity: def.opacity ?? 1,
+                roughness: 0.6,
+                metalness: 0.1,
+                side: THREE.DoubleSide,
+                shadowSide: THREE.FrontSide,
+                alphaTest: hasTexture ? 0.1 : 0,
+            });
+            return material;
+        }) as THREE.MeshStandardMaterial;
+
         if (texturePathValue) {
             const loader = new THREE.TextureLoader();
             const path = texturePathValue.startsWith('textures/') || texturePathValue.startsWith('sprites/')
@@ -885,15 +901,19 @@ export class RoomManager {
 
     private spawnSpriteEntity(def: EntitySpawnDef, floorY: number, isPlayer: boolean, playerSpeed: number = 3.0) {
         let tex = this.textureManager.getTexture(def.spriteKey) ?? null;
-
-        const mat = new THREE.MeshStandardMaterial({
+        const materialKey = `sprite|${def.spriteKey}|alpha|transparent`;
+        const mat = this.getMaterial(materialKey, () => new THREE.MeshStandardMaterial({
             transparent: true,
             alphaTest: 0.1,
             side: THREE.DoubleSide,
             map: tex ?? undefined,
             roughness: 0.8,
             metalness: 0.0,
-        });
+        })) as THREE.MeshStandardMaterial;
+
+        if (tex) {
+            mat.map = tex;
+        }
 
         // If texture isn't in the manager yet, load it asynchronously
         if (!tex && def.spriteKey) {
@@ -952,7 +972,6 @@ export class RoomManager {
                 const meta = this.sheetMeta.get(def.spriteKey);
                 const frameAspect = meta ? (imgAspect * (meta.rows / meta.columns)) : imgAspect;
                 spriteW = def.height * frameAspect;
-                console.log(`Sprite ${def.spriteKey} -> auto-adjusted width ${spriteW.toFixed(2)}`);
             }
         }
 
@@ -1016,14 +1035,16 @@ export class RoomManager {
     private spawnAtlasSpriteEntity(def: EntitySpawnDef, floorY: number, isPlayer: boolean = false, playerSpeed: number = 3.0) {
         const tex = this.textureManager.getTexture(def.spriteKey) ?? undefined;
 
-        const mat = new THREE.MeshStandardMaterial({
+        const materialKey = `atlas|${def.spriteKey}|alpha|transparent`;
+        const mat = this.getMaterial(materialKey, () => new THREE.MeshStandardMaterial({
             map: tex,
             transparent: true,
             alphaTest: 0.1,
             side: THREE.DoubleSide,
             roughness: 0.8,
             metalness: 0.0,
-        });
+        })) as THREE.MeshStandardMaterial;
+        if (tex) mat.map = tex;
 
         const geo  = new THREE.PlaneGeometry(1, 1);
         const mesh = new THREE.Mesh(geo, mat);
@@ -1167,44 +1188,45 @@ export class RoomManager {
      */
     private spawnDoorEntity3D(def: EntitySpawnDef, floorY: number) {
         const geo = new THREE.BoxGeometry(1, 1, 1);
-        const color = new THREE.Color(def.color || '#6B4423');
-        const matParams: THREE.MeshStandardMaterialParameters = {
-            color,
-            transparent: (def.opacity ?? 1) < 1,
-            opacity: def.opacity ?? 1,
-            roughness: 0.7,
-            metalness: 0.1,
-            side: THREE.DoubleSide,
-        };
-
-        // Apply texture or sequence if specified
         const texturePathValue = def.sequenceSource || def.textureSource;
-        if (texturePathValue) {
-            const loader = new THREE.TextureLoader();
-            const path = texturePathValue.startsWith('textures/') || texturePathValue.startsWith('sprites/')
-                ? texturePathValue
-                : (def.sequenceSource ? `sprites/${texturePathValue}` : `textures/${texturePathValue}`);
-            const tex = loader.load(`/assets/${path}`);
-            tex.wrapS = THREE.RepeatWrapping;
-            tex.wrapT = THREE.RepeatWrapping;
-            if (def.atlasFrames && def.imageWidth && def.imageHeight && def.atlasFrames.length > 0) {
-                const firstFrame = def.atlasFrames[0];
-                tex.repeat.set(firstFrame.w / def.imageWidth, firstFrame.h / def.imageHeight);
-                tex.offset.set(firstFrame.x / def.imageWidth, 1 - (firstFrame.y + firstFrame.h) / def.imageHeight);
-            } else {
-                if (def.uvTilingX || def.uvTilingY) {
-                    tex.repeat.set(def.uvTilingX || 1, def.uvTilingY || 1);
-                }
-                if (def.uvOffsetX || def.uvOffsetY) {
-                    tex.offset.set(def.uvOffsetX || 0, def.uvOffsetY || 0);
-                }
-            }
-            matParams.map = tex;
-            matParams.color = new THREE.Color(0xffffff);
-        }
+        const materialKey = `door|${texturePathValue || def.color || '#6B4423'}|opacity:${def.opacity ?? 1}|tiling:${def.uvTilingX ?? 1},${def.uvTilingY ?? 1}|offset:${def.uvOffsetX ?? 0},${def.uvOffsetY ?? 0}`;
+        const mat = this.getMaterial(materialKey, () => {
+            const params: THREE.MeshStandardMaterialParameters = {
+                color: new THREE.Color(def.color || '#6B4423'),
+                transparent: (def.opacity ?? 1) < 1,
+                opacity: def.opacity ?? 1,
+                roughness: 0.7,
+                metalness: 0.1,
+                side: THREE.DoubleSide,
+                shadowSide: THREE.FrontSide,
+            };
 
-        matParams.shadowSide = THREE.FrontSide;
-        const mat = new THREE.MeshStandardMaterial(matParams);
+            if (texturePathValue) {
+                const loader = new THREE.TextureLoader();
+                const path = texturePathValue.startsWith('textures/') || texturePathValue.startsWith('sprites/')
+                    ? texturePathValue
+                    : (def.sequenceSource ? `sprites/${texturePathValue}` : `textures/${texturePathValue}`);
+                const tex = loader.load(`/assets/${path}`);
+                tex.wrapS = THREE.RepeatWrapping;
+                tex.wrapT = THREE.RepeatWrapping;
+                if (def.atlasFrames && def.imageWidth && def.imageHeight && def.atlasFrames.length > 0) {
+                    const firstFrame = def.atlasFrames[0];
+                    tex.repeat.set(firstFrame.w / def.imageWidth, firstFrame.h / def.imageHeight);
+                    tex.offset.set(firstFrame.x / def.imageWidth, 1 - (firstFrame.y + firstFrame.h) / def.imageHeight);
+                } else {
+                    if (def.uvTilingX || def.uvTilingY) {
+                        tex.repeat.set(def.uvTilingX || 1, def.uvTilingY || 1);
+                    }
+                    if (def.uvOffsetX || def.uvOffsetY) {
+                        tex.offset.set(def.uvOffsetX || 0, def.uvOffsetY || 0);
+                    }
+                }
+                params.map = tex;
+                params.color = new THREE.Color(0xffffff);
+            }
+
+            return new THREE.MeshStandardMaterial(params);
+        }) as THREE.MeshStandardMaterial;
         const mesh = new THREE.Mesh(geo, mat);
 
         const sx = def.scale?.x ?? 1.2;

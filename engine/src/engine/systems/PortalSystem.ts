@@ -63,8 +63,6 @@ export class PortalSystem extends System {
                     const anim = this.world.getComponent(playerEntity, 'SpriteAnimation');
                     if (anim) (anim as SpriteAnimation).state = 'idle';
 
-                    console.log(`Portal → ${portal.targetRoom}`);
-
                 const nextRoom = this.availableRooms[portal.targetRoom];
                 if (!nextRoom) { this.transitioning = false; return; }
 

@@ -63,6 +63,8 @@ export class Engine {
         }
 
         await this.roomManager.loadRoom(room);
+        // Pre-compile all shaders so the first rendered frame doesn't stall
+        this.renderer.warmup(this.scene, this.camera);
     }
 
     public getCameraSystem(): CameraSystem | undefined {

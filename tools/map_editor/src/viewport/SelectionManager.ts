@@ -180,8 +180,10 @@ export class SelectionManager {
           while (p && !p.userData?.entityId) p = p.parent;
           if (p && p.userData?.entityId) {
             obj.userData.entityId = p.userData.entityId;
+            this.select(p);
+          } else {
+            this.select(obj);
           }
-          this.select(obj);
           return;
         }
 
@@ -190,12 +192,16 @@ export class SelectionManager {
         // entityId already.
         if (obj.userData?.isLightTarget) {
           // ensure entityId exists by walking to parent if necessary
+          let targetObj: THREE.Object3D = obj;
           if (!obj.userData.entityId) {
             let p: THREE.Object3D | null = obj;
             while (p && !p.userData?.entityId) p = p.parent;
-            if (p && p.userData?.entityId) obj.userData.entityId = p.userData.entityId;
+            if (p && p.userData?.entityId) {
+              obj.userData.entityId = p.userData.entityId;
+              targetObj = p;
+            }
           }
-          this.select(obj);
+          this.select(targetObj);
           return;
         }
 

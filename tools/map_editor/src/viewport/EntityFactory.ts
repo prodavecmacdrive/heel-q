@@ -35,8 +35,27 @@ export class EntityFactory {
   }
 
   public create(entity: EditorEntity): THREE.Object3D {
-    let obj: THREE.Object3D;
+    // Strict fallback: always ensure transform and subfields exist
+    if (!entity.transform || typeof entity.transform !== 'object') {
+      entity.transform = { position: { x: 0, y: 0, z: 0 }, rotation: { x: 0, y: 0, z: 0 }, scale: { x: 1, y: 1, z: 1 } };
+    } else {
+      entity.transform.position = entity.transform.position || { x: 0, y: 0, z: 0 };
+      entity.transform.rotation = entity.transform.rotation || { x: 0, y: 0, z: 0 };
+      entity.transform.scale = entity.transform.scale || { x: 1, y: 1, z: 1 };
+    }
+    const t = entity.transform;
+    // Defensive: ensure all subfields are numbers
+    t.position.x = t.position.x ?? 0;
+    t.position.y = t.position.y ?? 0;
+    t.position.z = t.position.z ?? 0;
+    t.rotation.x = t.rotation.x ?? 0;
+    t.rotation.y = t.rotation.y ?? 0;
+    t.rotation.z = t.rotation.z ?? 0;
+    t.scale.x = t.scale.x ?? 1;
+    t.scale.y = t.scale.y ?? 1;
+    t.scale.z = t.scale.z ?? 1;
 
+    let obj: THREE.Object3D;
     switch (entity.type) {
       case 'sprite':
         obj = this.createSprite(entity);
@@ -71,10 +90,11 @@ export class EntityFactory {
       case 'archetype_instance':
         obj = this.createArchetypeInstance(entity);
         break;
+      default:
+        // Fallback: empty object
+        obj = new THREE.Object3D();
     }
 
-    // Apply transform
-    const t = entity.transform;
     obj.position.set(t.position.x, t.position.y, t.position.z);
     obj.rotation.set(
       THREE.MathUtils.degToRad(t.rotation.x),
@@ -112,11 +132,11 @@ export class EntityFactory {
            const loader = new THREE.TextureLoader();
            // if it's from the content browser, it might already include 'sprites/' or 'textures/'
            let path = entity.textureSource;
-           if (!path.startsWith('sprites/') && !path.startsWith('textures/')) {
+           if (!path.startsWith('sprites/') && !path.startsWith('textures/') && !path.startsWith('data:') && !path.startsWith('blob:')) {
              const dir = entity.type === 'animated_sprite' ? 'sprites/' : 'textures/';
              path = `${dir}${path}`;
            }
-           tex = loader.load(`/assets/${path}`);
+           tex = loader.load(path.startsWith('data:') || path.startsWith('blob:') ? path : `/assets/${path}`);
            this.textureCache.set(entity.textureSource, tex);
         }
         matArgs.map = tex;
@@ -190,7 +210,7 @@ export class EntityFactory {
       let tex = this.textureCache.get(texSrc);
       if (!tex) {
         const loader = new THREE.TextureLoader();
-        const path = texSrc.startsWith('textures/') || texSrc.startsWith('sprites/')
+        const path = texSrc.startsWith('textures/') || texSrc.startsWith('sprites/') || texSrc.startsWith('data:') || texSrc.startsWith('blob:')
           ? texSrc
           : (hasSequence ? `sprites/${texSrc}` : `textures/${texSrc}`);
         
@@ -198,8 +218,8 @@ export class EntityFactory {
         const finalPath = (hasSequence && !path.endsWith('.png') && !path.endsWith('.jpg'))
             ? path.replace('.json', '.png').replace(/\.[^.]+$/, '.png')
             : path;
-            
-        tex = loader.load(`/assets/${finalPath}`);
+        
+        tex = loader.load(finalPath.startsWith('data:') || finalPath.startsWith('blob:') ? finalPath : `/assets/${finalPath}`);
         tex.wrapS = THREE.RepeatWrapping;
         tex.wrapT = THREE.RepeatWrapping;
         this.textureCache.set(texSrc, tex);

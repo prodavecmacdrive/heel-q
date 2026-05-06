@@ -131,8 +131,6 @@ export class PixelRenderer {
         this.renderer.setScissor(this.viewportX, this.viewportY, this.viewportWidth, this.viewportHeight);
 
         this.renderer.render(this.postScene, this.orthoCamera);
-
-        // Reset scissor
         this.renderer.setScissorTest(false);
     }
 
@@ -187,6 +185,15 @@ export class PixelRenderer {
             this.renderer.render(this.thumbnailQuad, this.orthoCamera);
             this.renderer.setScissorTest(false);
         }
+    }
+
+    /**
+     * Force GPU shader compilation for all materials in the scene.
+     * Call once after room load and before the game loop starts to
+     * avoid a stall on the first rendered frame.
+     */
+    public warmup(scene: THREE.Scene, camera: THREE.Camera): void {
+        this.renderer.compile(scene, camera);
     }
 
     public getDomElement(): HTMLCanvasElement {

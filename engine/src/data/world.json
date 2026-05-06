@@ -58,8 +58,8 @@
           "type": "spawn",
           "transform": {
             "position": {
-              "x": -2.048,
-              "y": 0.042,
+              "x": 0.015,
+              "y": 0.012,
               "z": -3.736
             },
             "rotation": {
@@ -103,9 +103,9 @@
           "type": "door",
           "transform": {
             "position": {
-              "x": -1.9947369823601282,
+              "x": -1.059,
               "y": 0,
-              "z": -6.19044581371981
+              "z": -6.336
             },
             "rotation": {
               "x": 0,
@@ -345,8 +345,8 @@
           "transform": {
             "position": {
               "x": 3.762,
-              "y": 1.808,
-              "z": -2.37
+              "y": 1.75,
+              "z": -2.11
             },
             "rotation": {
               "x": -53.53,
@@ -362,7 +362,7 @@
           "visible": true,
           "layer": 0,
           "geometryType": "cube",
-          "materialType": "color",
+          "materialType": "textured",
           "color": "#808080",
           "isCollider": true,
           "opacity": 0.99,
@@ -394,174 +394,6 @@
               "x": 2.72,
               "y": -19.48,
               "z": -12.56
-            },
-            "scale": {
-              "x": 1.541,
-              "y": 1.761,
-              "z": 1.502
-            }
-          },
-          "visible": true,
-          "layer": 0,
-          "geometryType": "cube",
-          "materialType": "color",
-          "color": "#808080",
-          "isCollider": true,
-          "opacity": 0.99,
-          "textureSource": "",
-          "uvTilingX": 1,
-          "uvTilingY": 1,
-          "uvOffsetX": 0,
-          "uvOffsetY": 0,
-          "sequenceSource": "",
-          "sequenceJson": "",
-          "activeAnimation": "",
-          "playbackSpeed": 1,
-          "sequenceLoop": true,
-          "sequenceAutoplay": true,
-          "castShadows": true,
-          "receiveShadows": true
-        },
-        {
-          "id": "primitive_moryhinx_5",
-          "name": "New primitive",
-          "type": "primitive",
-          "transform": {
-            "position": {
-              "x": 1.444,
-              "y": 0.96,
-              "z": -6.221
-            },
-            "rotation": {
-              "x": 2.72,
-              "y": -19.48,
-              "z": -12.56
-            },
-            "scale": {
-              "x": 1.541,
-              "y": 1.761,
-              "z": 1.502
-            }
-          },
-          "visible": true,
-          "layer": 0,
-          "geometryType": "cube",
-          "materialType": "color",
-          "color": "#808080",
-          "isCollider": true,
-          "opacity": 0.99,
-          "textureSource": "",
-          "uvTilingX": 1,
-          "uvTilingY": 1,
-          "uvOffsetX": 0,
-          "uvOffsetY": 0,
-          "sequenceSource": "",
-          "sequenceJson": "",
-          "activeAnimation": "",
-          "playbackSpeed": 1,
-          "sequenceLoop": true,
-          "sequenceAutoplay": true,
-          "castShadows": true,
-          "receiveShadows": true
-        },
-        {
-          "id": "primitive_moryhpem_6",
-          "name": "New primitive",
-          "type": "primitive",
-          "transform": {
-            "position": {
-              "x": 1.163,
-              "y": 2.311,
-              "z": -5.221
-            },
-            "rotation": {
-              "x": -63.67,
-              "y": 4.28,
-              "z": 20.66
-            },
-            "scale": {
-              "x": 1.541,
-              "y": 1.761,
-              "z": 1.502
-            }
-          },
-          "visible": true,
-          "layer": 0,
-          "geometryType": "cube",
-          "materialType": "color",
-          "color": "#808080",
-          "isCollider": true,
-          "opacity": 0.99,
-          "textureSource": "",
-          "uvTilingX": 1,
-          "uvTilingY": 1,
-          "uvOffsetX": 0,
-          "uvOffsetY": 0,
-          "sequenceSource": "",
-          "sequenceJson": "",
-          "activeAnimation": "",
-          "playbackSpeed": 1,
-          "sequenceLoop": true,
-          "sequenceAutoplay": true,
-          "castShadows": true,
-          "receiveShadows": true
-        },
-        {
-          "id": "primitive_moryhy4s_7",
-          "name": "New primitive",
-          "type": "primitive",
-          "transform": {
-            "position": {
-              "x": -0.045,
-              "y": 2.311,
-              "z": -6.246
-            },
-            "rotation": {
-              "x": -149.89,
-              "y": -20.42,
-              "z": 35.87
-            },
-            "scale": {
-              "x": 1.541,
-              "y": 1.761,
-              "z": 1.502
-            }
-          },
-          "visible": true,
-          "layer": 0,
-          "geometryType": "cube",
-          "materialType": "color",
-          "color": "#808080",
-          "isCollider": true,
-          "opacity": 0.99,
-          "textureSource": "",
-          "uvTilingX": 1,
-          "uvTilingY": 1,
-          "uvOffsetX": 0,
-          "uvOffsetY": 0,
-          "sequenceSource": "",
-          "sequenceJson": "",
-          "activeAnimation": "",
-          "playbackSpeed": 1,
-          "sequenceLoop": true,
-          "sequenceAutoplay": true,
-          "castShadows": true,
-          "receiveShadows": true
-        },
-        {
-          "id": "primitive_moryic93_8",
-          "name": "New primitive",
-          "type": "primitive",
-          "transform": {
-            "position": {
-              "x": -0.243,
-              "y": 1.214,
-              "z": -6.014
-            },
-            "rotation": {
-              "x": 179.11,
-              "y": 23.79,
-              "z": 1.09
             },
             "scale": {
               "x": 1.541,
@@ -689,44 +521,398 @@
           "rectHeight": 1
         },
         {
-          "id": "sprite_mossawjh_3",
-          "name": "New sprite",
-          "type": "sprite",
+          "id": "decal_motevlrs_1sd1",
+          "name": "Imprint",
+          "type": "decal",
           "transform": {
             "position": {
-              "x": -0.774,
-              "y": -0.347,
-              "z": -3.666
+              "x": 1.9915,
+              "y": 1.380653713148551,
+              "z": -4.2249656004963505
             },
             "rotation": {
-              "x": -33.44,
-              "y": -21.05,
-              "z": -13.35
+              "x": 0,
+              "y": 0,
+              "z": 0
             },
             "scale": {
               "x": 1,
-              "y": 1.374,
+              "y": 1,
               "z": 1
             }
           },
           "visible": true,
           "layer": 0,
-          "textureSource": "textures/lamp_4.png",
+          "textureSource": "",
+          "fillType": "solid",
+          "color": "#ffffff",
+          "opacity": 1,
           "normalMap": "",
-          "depthMap": "",
+          "roughness": 0.6,
+          "metalness": 0,
+          "emissiveColor": "#000000",
+          "emissiveIntensity": 0,
           "blendMode": "normal",
-          "castShadows": true,
-          "receiveShadows": true,
-          "billboardMode": "face_camera",
-          "isCollider": true
+          "castShadows": false,
+          "receiveShadows": false,
+          "decalWidth": 1,
+          "decalHeight": 1,
+          "parentEntityId": "primitive_moryfs2o_1",
+          "surfaceNormal": {
+            "x": -1,
+            "y": 0,
+            "z": 0
+          },
+          "targetSurface": "entity"
+        },
+        {
+          "id": "decal_motevnih_d2rj",
+          "name": "Imprint",
+          "type": "decal",
+          "transform": {
+            "position": {
+              "x": 1.9915,
+              "y": 1.2483043684172166,
+              "z": -4.863781210415833
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            }
+          },
+          "visible": true,
+          "layer": 0,
+          "textureSource": "",
+          "fillType": "solid",
+          "color": "#ffffff",
+          "opacity": 1,
+          "normalMap": "",
+          "roughness": 0.6,
+          "metalness": 0,
+          "emissiveColor": "#000000",
+          "emissiveIntensity": 0,
+          "blendMode": "normal",
+          "castShadows": false,
+          "receiveShadows": false,
+          "decalWidth": 1,
+          "decalHeight": 1,
+          "parentEntityId": "primitive_moryfs2o_1",
+          "surfaceNormal": {
+            "x": -1,
+            "y": 0,
+            "z": 0
+          },
+          "targetSurface": "entity"
+        },
+        {
+          "id": "decal_motevof3_47oi",
+          "name": "Imprint",
+          "type": "decal",
+          "transform": {
+            "position": {
+              "x": 1.9915,
+              "y": 1.9451236852958598,
+              "z": -4.4807491089574825
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            }
+          },
+          "visible": true,
+          "layer": 0,
+          "textureSource": "",
+          "fillType": "solid",
+          "color": "#ffffff",
+          "opacity": 1,
+          "normalMap": "",
+          "roughness": 0.6,
+          "metalness": 0,
+          "emissiveColor": "#000000",
+          "emissiveIntensity": 0,
+          "blendMode": "normal",
+          "castShadows": false,
+          "receiveShadows": false,
+          "decalWidth": 1,
+          "decalHeight": 1,
+          "parentEntityId": "primitive_moryfs2o_1",
+          "surfaceNormal": {
+            "x": -1,
+            "y": 0,
+            "z": 0
+          },
+          "targetSurface": "entity"
+        },
+        {
+          "id": "decal_motevp7g_b0fa",
+          "name": "Imprint",
+          "type": "decal",
+          "transform": {
+            "position": {
+              "x": 2.3153847688553686,
+              "y": 1.7945256656903825,
+              "z": -4.159361269093845
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            }
+          },
+          "visible": true,
+          "layer": 0,
+          "textureSource": "",
+          "fillType": "solid",
+          "color": "#ffffff",
+          "opacity": 1,
+          "normalMap": "",
+          "roughness": 0.6,
+          "metalness": 0,
+          "emissiveColor": "#000000",
+          "emissiveIntensity": 0,
+          "blendMode": "normal",
+          "castShadows": false,
+          "receiveShadows": false,
+          "decalWidth": 1,
+          "decalHeight": 1,
+          "parentEntityId": "primitive_moryfs2o_1",
+          "surfaceNormal": {
+            "x": 0,
+            "y": 0.8041681988948688,
+            "z": 0.5944018067655774
+          },
+          "targetSurface": "entity"
+        },
+        {
+          "id": "decal_motevpm6_2qv2",
+          "name": "Imprint",
+          "type": "decal",
+          "transform": {
+            "position": {
+              "x": 1.9915,
+              "y": 1.3927582508880632,
+              "z": -4.549958195666511
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            }
+          },
+          "visible": true,
+          "layer": 0,
+          "textureSource": "",
+          "fillType": "solid",
+          "color": "#ffffff",
+          "opacity": 1,
+          "normalMap": "",
+          "roughness": 0.6,
+          "metalness": 0,
+          "emissiveColor": "#000000",
+          "emissiveIntensity": 0,
+          "blendMode": "normal",
+          "castShadows": false,
+          "receiveShadows": false,
+          "decalWidth": 1,
+          "decalHeight": 1,
+          "parentEntityId": "primitive_moryfs2o_1",
+          "surfaceNormal": {
+            "x": -1,
+            "y": 0,
+            "z": 0
+          },
+          "targetSurface": "entity"
+        },
+        {
+          "id": "decal_motevq0f_ebsp",
+          "name": "Imprint",
+          "type": "decal",
+          "transform": {
+            "position": {
+              "x": 2.245426901562781,
+              "y": 2.319694136217063,
+              "z": -4.8698634550778985
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            }
+          },
+          "visible": true,
+          "layer": 0,
+          "textureSource": "",
+          "fillType": "solid",
+          "color": "#ffffff",
+          "opacity": 1,
+          "normalMap": "",
+          "roughness": 0.6,
+          "metalness": 0,
+          "emissiveColor": "#000000",
+          "emissiveIntensity": 0,
+          "blendMode": "normal",
+          "castShadows": false,
+          "receiveShadows": false,
+          "decalWidth": 1,
+          "decalHeight": 1,
+          "parentEntityId": "primitive_moryfs2o_1",
+          "surfaceNormal": {
+            "x": 0,
+            "y": 0.8041681988948688,
+            "z": 0.5944018067655774
+          },
+          "targetSurface": "entity"
+        },
+        {
+          "id": "decal_motevqd1_lc54",
+          "name": "Imprint",
+          "type": "decal",
+          "transform": {
+            "position": {
+              "x": 2.329776698327499,
+              "y": 1.970778689071858,
+              "z": -4.397814575845578
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            }
+          },
+          "visible": true,
+          "layer": 0,
+          "textureSource": "",
+          "fillType": "solid",
+          "color": "#ffffff",
+          "opacity": 1,
+          "normalMap": "",
+          "roughness": 0.6,
+          "metalness": 0,
+          "emissiveColor": "#000000",
+          "emissiveIntensity": 0,
+          "blendMode": "normal",
+          "castShadows": false,
+          "receiveShadows": false,
+          "decalWidth": 1,
+          "decalHeight": 1,
+          "parentEntityId": "primitive_moryfs2o_1",
+          "surfaceNormal": {
+            "x": 0,
+            "y": 0.8041681988948688,
+            "z": 0.5944018067655774
+          },
+          "targetSurface": "entity"
+        },
+        {
+          "id": "decal_motevqt1_fi1y",
+          "name": "Imprint",
+          "type": "decal",
+          "transform": {
+            "position": {
+              "x": 2.3244649042383725,
+              "y": 2.1403671751188464,
+              "z": -4.627251407674555
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            }
+          },
+          "visible": true,
+          "layer": 0,
+          "textureSource": "",
+          "fillType": "solid",
+          "color": "#ffffff",
+          "opacity": 1,
+          "normalMap": "",
+          "roughness": 0.6,
+          "metalness": 0,
+          "emissiveColor": "#000000",
+          "emissiveIntensity": 0,
+          "blendMode": "normal",
+          "castShadows": false,
+          "receiveShadows": false,
+          "decalWidth": 1,
+          "decalHeight": 1,
+          "parentEntityId": "primitive_moryfs2o_1",
+          "surfaceNormal": {
+            "x": 0,
+            "y": 0.8041681988948688,
+            "z": 0.5944018067655774
+          },
+          "targetSurface": "entity"
+        },
+        {
+          "id": "arch_mou7no87_1",
+          "name": "table",
+          "type": "archetype_instance",
+          "archetypeId": "table",
+          "transform": {
+            "position": {
+              "x": -2.099,
+              "y": 0,
+              "z": -3.124
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 0.557,
+              "y": 1,
+              "z": 0.574
+            }
+          },
+          "visible": true,
+          "layer": 0,
+          "overrides": {}
         }
       ],
       "spawnPoints": [
         {
           "id": "spawn_default",
           "position": {
-            "x": -2.048,
-            "y": 0.042,
+            "x": 0.015,
+            "y": 0.012,
             "z": -3.736
           }
         }
@@ -869,9 +1055,9 @@
           "type": "door",
           "transform": {
             "position": {
-              "x": -1.9947369823601282,
+              "x": -3.296,
               "y": 0,
-              "z": -6.19044581371981
+              "z": -5.988
             },
             "rotation": {
               "x": 0,
@@ -943,12 +1129,12 @@
       "id": "door_1777690093242",
       "points": [
         {
-          "x": -1.1869678573320535,
-          "y": -6.315861686444491
+          "x": -0.251,
+          "y": -6.461
         },
         {
-          "x": -2.802506107388203,
-          "y": -6.065029940995128
+          "x": -1.867,
+          "y": -6.211
         }
       ],
       "room1Id": "room_1776477096922",

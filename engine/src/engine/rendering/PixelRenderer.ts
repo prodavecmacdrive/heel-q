@@ -67,23 +67,21 @@ export class PixelRenderer {
         this.thumbnailQuad = new THREE.Mesh(planeGeometry, thumbMat);
         this.helperCamera = new THREE.PerspectiveCamera(45, 16 / 9, 0.1, 100);
 
-        // Bind resize event to the canvas parent instead of window
+        // Bind resize event
         window.addEventListener('resize', this.onWindowResize.bind(this));
-
-        // Use a small delay to ensure DOM is ready and container has size
-        setTimeout(() => this.onWindowResize(), 0);
+        this.onWindowResize(); // Force initial sizing
     }
 
     /**
      * Strict Letterbox / Pillarbox resize handler.
-     * Now respects the size of the canvas parent container.
+     * The WebGLRenderer's pixel buffer covers the full window, but
+     * the viewport scissor is constrained to the largest 16:9 rect
+     * that fits inside the window.  The canvas element is always
+     * full-window so the black bars come from the cleared background.
      */
     private onWindowResize() {
-        const parent = this.canvas.parentElement;
-        if (!parent) return;
-
-        const winW = parent.clientWidth;
-        const winH = parent.clientHeight;
+        const winW = window.innerWidth;
+        const winH = window.innerHeight;
 
         // The renderer buffer always matches the window
         this.renderer.setSize(winW, winH);

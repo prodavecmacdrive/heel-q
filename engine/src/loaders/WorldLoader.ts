@@ -125,7 +125,7 @@ export class WorldLoader {
         nextAncestry.add(e.archetypeId);
 
         const nestedEntities = getNestedArchetypeInstances(e, archetypeSchema)
-            .flatMap((child: any) => {
+            .flatMap((child) => {
                 const worldTarget = child.targetPosition
                     ? composePoint(e.transform, child.targetPosition)
                     : undefined;

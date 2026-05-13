@@ -54,13 +54,14 @@ export class InputSystem extends System {
     }
 
     private onPointerDown(event: PointerEvent) {
+        const rect = this.pixelRenderer.getDomElement().getBoundingClientRect();
         const vx = this.pixelRenderer.viewportX;
         const vy = this.pixelRenderer.viewportY;
         const vw = this.pixelRenderer.viewportWidth;
         const vh = this.pixelRenderer.viewportHeight;
 
-        const localX = event.clientX - vx;
-        const localY = event.clientY - vy;
+        const localX = (event.clientX - rect.left) - vx;
+        const localY = (event.clientY - rect.top) - vy;
         if (localX < 0 || localY < 0 || localX > vw || localY > vh) return;
 
         this.mouse.x = (localX / vw) * 2 - 1;

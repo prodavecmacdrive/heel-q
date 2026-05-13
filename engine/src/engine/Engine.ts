@@ -5,6 +5,7 @@ import { TextureManager } from './rendering/TextureManager';
 import { RoomManager } from './rooms/RoomManager';
 import { RoomData } from './rooms/RoomData';
 import { RoomNotFoundError } from '../errors';
+import { UIManager } from '../ui/UIManager';
 
 // Systems
 import { SpriteSystem } from './systems/SpriteSystem';
@@ -30,10 +31,18 @@ export class Engine {
     private availableRooms: Record<string, RoomData> = {};
     private lastTime: number = 0;
     private running: boolean = false;
+    private uiManager: UIManager;
 
     constructor(canvas: HTMLCanvasElement) {
         this.scene = new THREE.Scene();
         this.camera = new THREE.PerspectiveCamera(45, 16 / 9, 0.1, 100);
+
+        // Initialize UI first so we can move the canvas into it
+        const container = canvas.parentElement || document.body;
+        this.uiManager = new UIManager(container);
+        const viewport = this.uiManager.getViewportContainer();
+        viewport.appendChild(canvas);
+
         this.renderer = new PixelRenderer(canvas);
         this.textureManager = new TextureManager();
         this.world = new World();
@@ -63,6 +72,8 @@ export class Engine {
         }
 
         await this.roomManager.loadRoom(room);
+        this.uiManager.setLocationName(room.name);
+
         // Pre-compile all shaders so the first rendered frame doesn't stall
         this.renderer.warmup(this.scene, this.camera);
     }
